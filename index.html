@@ -242,25 +242,32 @@ function loadSVG(name, src){
 }
 
 // 蝴蝶物理狀態
+// 蝴蝶1 觸鬚朝左 → 預設向左飛（vx<0），向右飛時 scaleX(-1)
+// 蝴蝶2 觸鬚朝右 → 預設向右飛（vx>0），向左飛時 scaleX(-1)
+const BUTTERFLY_DEFAULT_DIR = { butterfly1: -1, butterfly2: 1 };
+
 class ButterflyDOM {
   constructor(svgName){
     this.svgName = svgName;
-    this.size = 28 + rnd(18); // px 顯示大小
-    // 低空飛行：畫面下方 55%~92% 高度
+    this.defaultDir = BUTTERFLY_DEFAULT_DIR[svgName] || 1;
+    // 縮小到 20%：約 10~14px 顯示大小
+    this.size = 10 + rnd(4);
+    // 低空飛行：畫面下方 60%~90%
     this.x = rnd(window.innerWidth);
-    this.y = window.innerHeight * (0.55 + rnd(0.37));
-    // 主要左右移動
-    this.vx = (Math.random()>0.5?1:-1) * (0.4 + rnd(0.6));
-    this.vy = 0; // 垂直速度
-    // 上下微幅震盪
-    this.swayAmp = 8 + rnd(12);
-    this.swayFreq = 0.008 + rnd(0.008);
-    this.t = rnd(1000);
+    this.y = window.innerHeight * (0.60 + rnd(0.30));
     this.baseY = this.y;
-    // 翅膀
-    this.wingSpeed = 1.5 + rnd(1.5); // animation duration (s)
+    // 亂數左右飛，速度很慢
+    this.vx = (Math.random()>0.5?1:-1) * (0.3 + rnd(0.4));
+    // 上下微幅震盪
+    this.swayAmp = 5 + rnd(8);
+    this.swayFreq = 0.006 + rnd(0.006);
+    this.t = rnd(1000);
+    // 翅膀速度
+    this.wingSpeed = 1.2 + rnd(1.0);
+    // 若隱若現：最大透明度只到 0.5
+    this.maxOpacity = 0.3 + rnd(0.25);
     this.opacity = 0;
-    this.fadeIn = 0.005 + rnd(0.005);
+    this.fadeIn = 0.003 + rnd(0.003);
     this.el = null;
     this.alive = true;
     this._build();
@@ -279,13 +286,11 @@ class ButterflyDOM {
       opacity:0;
       transform-origin:center center;
     `;
-    // 插入 SVG，縮放到容器大小
     const svgEl = document.createElement('div');
     svgEl.innerHTML = svg;
     const svgNode = svgEl.querySelector('svg');
     if(svgNode){
       svgNode.style.cssText = `width:100%;height:100%;`;
-      // 翅膀開合：對整個 SVG 做 scaleX
       svgNode.style.animation = `wingFlap ${this.wingSpeed}s ease-in-out infinite`;
       svgNode.style.transformOrigin = 'center center';
     }
@@ -296,22 +301,21 @@ class ButterflyDOM {
   update(){
     if(!this.el) return;
     this.t++;
-    // 左右移動
     this.x += this.vx;
-    // 上下微幅震盪
     this.y = this.baseY + Math.sin(this.t * this.swayFreq) * this.swayAmp;
-    // 邊界：左右穿越
+    // 邊界穿越
     if(this.x < -this.size*3) this.x = window.innerWidth + this.size;
     if(this.x > window.innerWidth + this.size*3) this.x = -this.size;
-    // 淡入
-    this.opacity = Math.min(1, this.opacity + this.fadeIn);
-    // 更新 DOM
+    this.opacity = Math.min(this.maxOpacity, this.opacity + this.fadeIn);
     const alpha = this.opacity * seasonAlpha;
     this.el.style.left = (this.x - this.size) + 'px';
     this.el.style.top  = (this.y - this.size) + 'px';
     this.el.style.opacity = alpha;
-    // 朝向：vx < 0 翻轉
-    this.el.style.transform = this.vx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
+    // 方向判斷：
+    // 蝴蝶1(預設朝左)：vx<0向左飛不翻，vx>0向右飛翻轉
+    // 蝴蝶2(預設朝右)：vx>0向右飛不翻，vx<0向左飛翻轉
+    const needFlip = (this.vx * this.defaultDir) < 0;
+    this.el.style.transform = needFlip ? 'scaleX(-1)' : 'scaleX(1)';
   }
   destroy(){
     if(this.el) this.el.remove();
@@ -323,9 +327,9 @@ function buildButterflies(){
   butterflyInstances.forEach(b => b.destroy());
   butterflyInstances = [];
   if(!svgCache['butterfly1'] && !svgCache['butterfly2']) return;
-  const count = 5;
+  const count = 3 + Math.floor(Math.random()*2); // 3~4隻
   for(let i=0;i<count;i++){
-    const name = (i%2===0 && svgCache['butterfly1']) ? 'butterfly1' : 
+    const name = (Math.random()>0.5 && svgCache['butterfly1']) ? 'butterfly1' :
                  (svgCache['butterfly2'] ? 'butterfly2' : 'butterfly1');
     if(svgCache[name]) butterflyInstances.push(new ButterflyDOM(name));
   }
