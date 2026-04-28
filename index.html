@@ -20,6 +20,19 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
   background:linear-gradient(180deg,rgba(8,5,15,0.6) 0%,transparent 10%,transparent 90%,rgba(8,5,15,0.6) 100%);
 }
 #canvas { position:fixed; inset:0; pointer-events:none; z-index:20; }
+
+/* SVG 蝴蝶容器 */
+#svg-layer { position:fixed; inset:0; pointer-events:none; z-index:21; overflow:hidden; }
+.butterfly-wrap {
+  position:absolute;
+  transform-origin:center center;
+}
+/* 翅膀開合動畫 */
+@keyframes wingFlap {
+  0%,100% { transform:scaleX(1); }
+  50%     { transform:scaleX(0.15); }
+}
+
 #brand { position:fixed; top:24px; right:28px; z-index:50; pointer-events:none; }
 #brand img { width:72px; opacity:0; filter:brightness(0) invert(1); transition:opacity 2s ease; }
 #guide { position:fixed; bottom:36px; left:50%; transform:translateX(-50%); z-index:50; pointer-events:none; text-align:center; opacity:0; transition:opacity 2s ease; }
@@ -45,11 +58,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
   color:rgba(255,245,250,0.2); pointer-events:none;
   opacity:0; transition:opacity 2s ease;
 }
-#cursor {
-  position:fixed; width:5px; height:5px; border-radius:50%;
-  background:rgba(255,240,255,0.35); pointer-events:none; z-index:9999;
-  transform:translate(-50%,-50%);
-}
+#cursor { position:fixed; width:5px; height:5px; border-radius:50%; background:rgba(255,240,255,0.35); pointer-events:none; z-index:9999; transform:translate(-50%,-50%); }
 </style>
 </head>
 <body>
@@ -58,6 +67,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 <div id="vignette"></div>
 <div id="edge-mask"></div>
 <canvas id="canvas"></canvas>
+<div id="svg-layer"></div>
 
 <div id="brand"><img src="images/logo.svg" alt="心映好事"></div>
 <div id="season-dots">
@@ -104,354 +114,342 @@ const FALLBACK = {
 // 建立全景
 // ═══════════════════════════════════════
 const panorama = document.getElementById('panorama');
-[...IMAGES,...IMAGES].forEach((item,i)=>{
+[...IMAGES,...IMAGES].forEach((item)=>{
   const panel = document.createElement('div');
   panel.className='panel';
-  panel.dataset.idx = i%IMAGES.length;
   panel.dataset.season = item.season;
   if(item.next) panel.dataset.next = item.next;
   const img = new Image();
   img.src=`images/${item.file}`;
   img.alt=item.season;
   img.style.cssText='height:100%;width:auto;display:block;';
-  img.onerror=()=>{
-    img.remove();
-    panel.style.cssText+=`width:${window.innerWidth}px;background:${FALLBACK[item.season]};`;
-  };
+  img.onerror=()=>{ img.remove(); panel.style.cssText+=`width:${window.innerWidth}px;background:${FALLBACK[item.season]};`; };
   panel.appendChild(img);
   panorama.appendChild(panel);
 });
 
 // ═══════════════════════════════════════
-// Canvas 粒子系統
+// Canvas 粒子（花瓣、螢火蟲、雪）
 // ═══════════════════════════════════════
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-
-function resizeCanvas(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
+function resizeCanvas(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-// 粒子池
-let particles = [];
-let targetSeason = 'spring';
-let activeSeason = 'spring';
-let seasonAlpha = 1; // 淡入淡出用
+let canvasParticles = [];
+let seasonAlpha = 1;
 
-// ── 蝴蝶（春）────────────────────────
-class Butterfly {
-  constructor(){
-    this.reset(true);
-  }
-  reset(init=false){
-    this.x = Math.random() * canvas.width;
-    this.y = init ? Math.random() * canvas.height : -20;
-    this.vx = (Math.random()-0.5) * 0.8; // 橫向速度
-    this.vy = 0.3 + Math.random() * 0.5;  // 向下緩慢
-    this.wingPhase = Math.random() * Math.PI * 2;
-    this.wingSpeed = 0.08 + Math.random() * 0.05;
-    this.size = 5 + Math.random() * 5;
-    this.color = `hsla(${330+Math.random()*40},${60+Math.random()*20}%,${70+Math.random()*15}%,`;
-    this.sinAmp = 30 + Math.random() * 30;   // 左右搖擺幅度
-    this.sinFreq = 0.01 + Math.random() * 0.01;
-    this.originX = this.x;
-    this.t = Math.random() * 1000;
-    this.opacity = 0;
-    this.fadeIn = 0.005 + Math.random()*0.005;
-  }
-  update(){
-    this.t += 1;
-    this.wingPhase += this.wingSpeed;
-    // 蝴蝶飛行：正弦橫移 + 緩慢向前（向下）
-    this.x = this.originX + Math.sin(this.t * this.sinFreq) * this.sinAmp;
-    this.y += this.vy;
-    this.originX += this.vx * 0.3;
-    this.opacity = Math.min(1, this.opacity + this.fadeIn);
-    if(this.y > canvas.height + 30) this.reset();
-    // 邊界反彈
-    if(this.originX < -50) this.originX = canvas.width + 50;
-    if(this.originX > canvas.width + 50) this.originX = -50;
-  }
-  draw(){
-    const alpha = this.opacity * seasonAlpha;
-    if(alpha <= 0) return;
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    const wingOpen = Math.abs(Math.sin(this.wingPhase));
-    // 左翅
-    ctx.beginPath();
-    ctx.ellipse(-this.size * wingOpen, 0, this.size * wingOpen, this.size * 0.6, -0.3, 0, Math.PI*2);
-    ctx.fillStyle = this.color + (alpha * 0.7) + ')';
-    ctx.fill();
-    // 右翅
-    ctx.beginPath();
-    ctx.ellipse(this.size * wingOpen, 0, this.size * wingOpen, this.size * 0.6, 0.3, 0, Math.PI*2);
-    ctx.fill();
-    // 身體
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 1.5, this.size * 0.4, 0, 0, Math.PI*2);
-    ctx.fillStyle = this.color + (alpha * 0.9) + ')';
-    ctx.fill();
-    ctx.restore();
-  }
-}
-
-// ── 花瓣（春）────────────────────────
+// ── 花瓣 ──────────────────────────────
 class Petal {
-  constructor(){
-    this.reset(true);
-  }
+  constructor(){ this.reset(true); }
   reset(init=false){
-    this.x = Math.random() * canvas.width;
-    this.y = init ? Math.random() * canvas.height : -10;
-    this.vx = -0.5 + Math.random() * 1.0; // 微側風
-    this.vy = 0.8 + Math.random() * 1.2;
-    this.rot = Math.random() * Math.PI * 2;
-    this.rotSpeed = (Math.random()-0.5) * 0.04;
-    this.w = 6 + Math.random() * 6;
-    this.h = this.w * 0.55;
-    this.r = Math.floor(225 + Math.random()*20);
-    this.g = Math.floor(150 + Math.random()*50);
-    this.b = Math.floor(170 + Math.random()*40);
-    this.opacity = 0;
-    this.fadeIn = 0.008 + Math.random()*0.006;
-    // 飄動：輕微正弦擺動
-    this.swayAmp = 8 + Math.random()*12;
-    this.swayFreq = 0.02 + Math.random()*0.02;
-    this.t = Math.random()*1000;
+    this.x=Math.random()*canvas.width;
+    this.y=init?Math.random()*canvas.height:-10;
+    this.vx=-0.5+Math.random()*1.0;
+    this.vy=0.8+Math.random()*1.2;
+    this.rot=Math.random()*Math.PI*2;
+    this.rotSpeed=(Math.random()-0.5)*0.04;
+    this.w=6+Math.random()*6; this.h=this.w*0.55;
+    this.r=225+rnd(20); this.g=150+rnd(50); this.b=170+rnd(40);
+    this.opacity=0; this.fadeIn=0.008+rnd(0.006);
+    this.swayFreq=0.02+rnd(0.02); this.t=rnd(1000);
   }
   update(){
-    this.t++;
-    this.x += this.vx + Math.sin(this.t * this.swayFreq) * 0.4;
-    this.y += this.vy;
-    this.rot += this.rotSpeed;
-    this.opacity = Math.min(1, this.opacity + this.fadeIn);
-    if(this.y > canvas.height + 15) this.reset();
+    this.t++; this.x+=this.vx+Math.sin(this.t*this.swayFreq)*0.4; this.y+=this.vy;
+    this.rot+=this.rotSpeed; this.opacity=Math.min(1,this.opacity+this.fadeIn);
+    if(this.y>canvas.height+15) this.reset();
   }
   draw(){
-    const alpha = this.opacity * seasonAlpha;
-    if(alpha<=0) return;
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.rot);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, this.w/2, this.h/2, 0, 0, Math.PI*2);
-    ctx.fillStyle = `rgba(${this.r},${this.g},${this.b},${alpha*0.75})`;
-    ctx.fill();
-    ctx.restore();
+    const a=this.opacity*seasonAlpha; if(a<=0)return;
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.rot);
+    ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${this.r},${this.g},${this.b},${a*0.75})`; ctx.fill(); ctx.restore();
   }
 }
 
-// ── 螢火蟲（夏）──────────────────────
+// ── 螢火蟲 ────────────────────────────
 class Firefly {
   constructor(){
-    this.x = Math.random() * canvas.width;
-    this.y = canvas.height * 0.3 + Math.random() * canvas.height * 0.55;
-    this.vx = 0; this.vy = 0;
-    this.targetX = this.x; this.targetY = this.y;
-    this.size = 2 + Math.random() * 3;
-    this.glowPhase = Math.random() * Math.PI * 2;
-    this.glowSpeed = 0.02 + Math.random() * 0.03;
-    this.changeTimer = 0;
-    this.changeInterval = 80 + Math.floor(Math.random()*120);
-    this.opacity = Math.random();
-    this.r = 200 + Math.floor(Math.random()*55);
-    this.g = 210 + Math.floor(Math.random()*45);
-    this.b = 80 + Math.floor(Math.random()*80);
+    this.x=rnd(canvas.width); this.y=canvas.height*0.3+rnd(canvas.height*0.55);
+    this.vx=0; this.vy=0; this.targetX=this.x; this.targetY=this.y;
+    this.size=2+rnd(3); this.glowPhase=rnd(Math.PI*2); this.glowSpeed=0.02+rnd(0.03);
+    this.changeTimer=0; this.changeInterval=80+Math.floor(rnd(120));
+    this.r=200+Math.floor(rnd(55)); this.g=210+Math.floor(rnd(45)); this.b=80+Math.floor(rnd(80));
   }
   update(){
-    this.glowPhase += this.glowSpeed;
-    this.changeTimer++;
-    if(this.changeTimer >= this.changeInterval){
-      this.changeTimer = 0;
-      this.changeInterval = 80 + Math.floor(Math.random()*120);
-      // 隨機選新目標（原地附近飄移）
-      const range = 60 + Math.random()*80;
-      const angle = Math.random() * Math.PI * 2;
-      this.targetX = Math.max(20, Math.min(canvas.width-20, this.x + Math.cos(angle)*range));
-      this.targetY = Math.max(canvas.height*0.2, Math.min(canvas.height*0.9, this.y + Math.sin(angle)*range*0.5));
+    this.glowPhase+=this.glowSpeed; this.changeTimer++;
+    if(this.changeTimer>=this.changeInterval){
+      this.changeTimer=0; this.changeInterval=80+Math.floor(rnd(120));
+      const range=60+rnd(80); const angle=rnd(Math.PI*2);
+      this.targetX=Math.max(20,Math.min(canvas.width-20,this.x+Math.cos(angle)*range));
+      this.targetY=Math.max(canvas.height*0.2,Math.min(canvas.height*0.9,this.y+Math.sin(angle)*range*0.5));
     }
-    // 緩慢飄向目標
-    this.vx += (this.targetX - this.x) * 0.008;
-    this.vy += (this.targetY - this.y) * 0.008;
-    this.vx *= 0.94;
-    this.vy *= 0.94;
-    this.x += this.vx;
-    this.y += this.vy;
+    this.vx+=(this.targetX-this.x)*0.008; this.vy+=(this.targetY-this.y)*0.008;
+    this.vx*=0.94; this.vy*=0.94; this.x+=this.vx; this.y+=this.vy;
   }
   draw(){
-    const glow = 0.5 + 0.5 * Math.sin(this.glowPhase);
-    const alpha = glow * seasonAlpha;
-    if(alpha<=0) return;
+    const glow=0.5+0.5*Math.sin(this.glowPhase); const a=glow*seasonAlpha; if(a<=0)return;
     ctx.save();
-    // 外光暈
-    const grad = ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.size*5);
-    grad.addColorStop(0, `rgba(${this.r},${this.g},${this.b},${alpha*0.6})`);
-    grad.addColorStop(1, `rgba(${this.r},${this.g},${this.b},0)`);
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size*5, 0, Math.PI*2);
-    ctx.fillStyle = grad;
-    ctx.fill();
-    // 核心亮點
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
-    ctx.fillStyle = `rgba(255,255,220,${alpha*0.9})`;
-    ctx.fill();
-    ctx.restore();
+    const grad=ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.size*5);
+    grad.addColorStop(0,`rgba(${this.r},${this.g},${this.b},${a*0.6})`);
+    grad.addColorStop(1,`rgba(${this.r},${this.g},${this.b},0)`);
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.size*5,0,Math.PI*2);
+    ctx.fillStyle=grad; ctx.fill();
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,220,${a*0.9})`; ctx.fill(); ctx.restore();
   }
 }
 
-// ── 落葉（秋）────────────────────────
-class FallingLeaf {
-  constructor(){
-    this.reset(true);
-  }
+// ── 雪花 ──────────────────────────────
+class Snowflake {
+  constructor(){ this.reset(true); }
   reset(init=false){
-    this.x = Math.random() * canvas.width;
-    this.y = init ? Math.random() * canvas.height : -15;
-    // 斜角：微向左或右
-    this.vx = -1.2 + Math.random() * 2.4;
-    this.vy = 1.0 + Math.random() * 1.8;
-    this.rot = Math.random() * Math.PI * 2;
-    this.rotSpeed = (Math.random()-0.5) * 0.08; // 大幅旋轉
-    this.size = 7 + Math.random() * 9;
-    this.r = Math.floor(160+Math.random()*80);
-    this.g = Math.floor(100+Math.random()*80);
-    this.b = Math.floor(10+Math.random()*50);
-    this.opacity = 0;
-    this.fadeIn = 0.006 + Math.random()*0.006;
-    // 空氣阻力搖擺
-    this.swayAmp = 15 + Math.random()*20;
-    this.swayFreq = 0.015 + Math.random()*0.015;
-    this.t = Math.random()*1000;
+    this.x=rnd(canvas.width); this.y=init?rnd(canvas.height):-8;
+    this.vx=-0.3+rnd(0.6); this.vy=0.4+rnd(0.8);
+    this.size=1.5+rnd(3); this.opacity=0; this.fadeIn=0.004+rnd(0.004);
+    this.swayFreq=0.008+rnd(0.01); this.t=rnd(1000);
+    this.brightness=210+Math.floor(rnd(45));
   }
   update(){
-    this.t++;
-    this.x += this.vx + Math.sin(this.t*this.swayFreq)*0.6;
-    this.y += this.vy;
-    this.rot += this.rotSpeed;
-    this.opacity = Math.min(1, this.opacity + this.fadeIn);
-    if(this.y > canvas.height+20) this.reset();
+    this.t++; this.x+=this.vx+Math.sin(this.t*this.swayFreq)*0.2; this.y+=this.vy;
+    this.opacity=Math.min(1,this.opacity+this.fadeIn);
+    if(this.y>canvas.height+10) this.reset();
   }
   draw(){
+    const a=this.opacity*seasonAlpha; if(a<=0)return;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${this.brightness},${this.brightness},${this.brightness+15},${a*0.55})`; ctx.fill();
+  }
+}
+
+function rnd(n){ return Math.random()*n; }
+
+// ═══════════════════════════════════════
+// SVG 蝴蝶系統（DOM-based）
+// ═══════════════════════════════════════
+const svgLayer = document.getElementById('svg-layer');
+let butterflyInstances = [];
+let svgReady = false;
+
+// 預載 SVG
+const svgCache = {};
+function loadSVG(name, src){
+  return fetch(src)
+    .then(r => r.text())
+    .then(text => { svgCache[name] = text; })
+    .catch(() => { svgCache[name] = null; });
+}
+
+// 蝴蝶物理狀態
+class ButterflyDOM {
+  constructor(svgName){
+    this.svgName = svgName;
+    this.size = 28 + rnd(18); // px 顯示大小
+    // 低空飛行：畫面下方 55%~92% 高度
+    this.x = rnd(window.innerWidth);
+    this.y = window.innerHeight * (0.55 + rnd(0.37));
+    // 主要左右移動
+    this.vx = (Math.random()>0.5?1:-1) * (0.4 + rnd(0.6));
+    this.vy = 0; // 垂直速度
+    // 上下微幅震盪
+    this.swayAmp = 8 + rnd(12);
+    this.swayFreq = 0.008 + rnd(0.008);
+    this.t = rnd(1000);
+    this.baseY = this.y;
+    // 翅膀
+    this.wingSpeed = 1.5 + rnd(1.5); // animation duration (s)
+    this.opacity = 0;
+    this.fadeIn = 0.005 + rnd(0.005);
+    this.el = null;
+    this.alive = true;
+    this._build();
+  }
+  _build(){
+    const svg = svgCache[this.svgName];
+    if(!svg) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'butterfly-wrap';
+    wrap.style.cssText = `
+      position:absolute;
+      width:${this.size*2}px;
+      height:${this.size*2}px;
+      left:${this.x - this.size}px;
+      top:${this.y - this.size}px;
+      opacity:0;
+      transform-origin:center center;
+    `;
+    // 插入 SVG，縮放到容器大小
+    const svgEl = document.createElement('div');
+    svgEl.innerHTML = svg;
+    const svgNode = svgEl.querySelector('svg');
+    if(svgNode){
+      svgNode.style.cssText = `width:100%;height:100%;`;
+      // 翅膀開合：對整個 SVG 做 scaleX
+      svgNode.style.animation = `wingFlap ${this.wingSpeed}s ease-in-out infinite`;
+      svgNode.style.transformOrigin = 'center center';
+    }
+    wrap.appendChild(svgNode || svgEl);
+    svgLayer.appendChild(wrap);
+    this.el = wrap;
+  }
+  update(){
+    if(!this.el) return;
+    this.t++;
+    // 左右移動
+    this.x += this.vx;
+    // 上下微幅震盪
+    this.y = this.baseY + Math.sin(this.t * this.swayFreq) * this.swayAmp;
+    // 邊界：左右穿越
+    if(this.x < -this.size*3) this.x = window.innerWidth + this.size;
+    if(this.x > window.innerWidth + this.size*3) this.x = -this.size;
+    // 淡入
+    this.opacity = Math.min(1, this.opacity + this.fadeIn);
+    // 更新 DOM
     const alpha = this.opacity * seasonAlpha;
-    if(alpha<=0) return;
+    this.el.style.left = (this.x - this.size) + 'px';
+    this.el.style.top  = (this.y - this.size) + 'px';
+    this.el.style.opacity = alpha;
+    // 朝向：vx < 0 翻轉
+    this.el.style.transform = this.vx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
+  }
+  destroy(){
+    if(this.el) this.el.remove();
+    this.alive = false;
+  }
+}
+
+function buildButterflies(){
+  butterflyInstances.forEach(b => b.destroy());
+  butterflyInstances = [];
+  if(!svgCache['butterfly1'] && !svgCache['butterfly2']) return;
+  const count = 5;
+  for(let i=0;i<count;i++){
+    const name = (i%2===0 && svgCache['butterfly1']) ? 'butterfly1' : 
+                 (svgCache['butterfly2'] ? 'butterfly2' : 'butterfly1');
+    if(svgCache[name]) butterflyInstances.push(new ButterflyDOM(name));
+  }
+}
+
+function clearButterflies(){
+  butterflyInstances.forEach(b => {
+    if(b.el){ b.el.style.transition='opacity 1.5s ease'; b.el.style.opacity='0'; }
+    setTimeout(()=>b.destroy(), 1600);
+  });
+  butterflyInstances = [];
+}
+
+// ═══════════════════════════════════════
+// SVG 銀杏葉系統（Canvas-based，用 Path2D）
+// ═══════════════════════════════════════
+let ginkgoPath = null;
+
+function buildGinkgoPath(){
+  if(!svgCache['ginkgo']) return;
+  // 從 SVG 提取 path d
+  const match = svgCache['ginkgo'].match(/d="([^"]+)"/);
+  if(!match) return;
+  try { ginkgoPath = new Path2D(match[1]); } catch(e){}
+}
+
+class GinkgoLeaf {
+  constructor(){ this.reset(true); }
+  reset(init=false){
+    this.x = rnd(canvas.width);
+    this.y = init ? rnd(canvas.height) : -15;
+    // 斜角飄落
+    this.vx = -1.2 + rnd(2.4);
+    this.vy = 0.9 + rnd(1.6);
+    this.rot = rnd(Math.PI*2);
+    this.rotSpeed = (Math.random()-0.5) * 0.07;
+    // SVG viewBox 是 1080×1080，縮小到 20-35px
+    this.scale = (0.018 + rnd(0.014));
+    this.opacity = 0; this.fadeIn = 0.006+rnd(0.006);
+    this.swayFreq = 0.015+rnd(0.015); this.t = rnd(1000);
+    // 色調微變：原色 #f5c74f 基礎上做微調
+    this.hue = 42 + rnd(12); // 橘黃系
+    this.sat = 85 + rnd(10);
+    this.lit = 60 + rnd(10);
+  }
+  update(){
+    this.t++; this.x+=this.vx+Math.sin(this.t*this.swayFreq)*0.5; this.y+=this.vy;
+    this.rot+=this.rotSpeed; this.opacity=Math.min(1,this.opacity+this.fadeIn);
+    if(this.y>canvas.height+20) this.reset();
+  }
+  draw(){
+    const a = this.opacity * seasonAlpha; if(a<=0||!ginkgoPath) return;
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    // 葉形：斜橢圓
-    ctx.beginPath();
-    ctx.ellipse(0, 0, this.size*0.45, this.size*0.28, 0.5, 0, Math.PI*2);
-    ctx.fillStyle=`rgba(${this.r},${this.g},${this.b},${alpha*0.8})`;
-    ctx.fill();
-    // 葉脈
-    ctx.beginPath();
-    ctx.moveTo(-this.size*0.4, 0);
-    ctx.lineTo(this.size*0.4, 0);
-    ctx.strokeStyle=`rgba(${this.r-30},${this.g-30},${this.b},${alpha*0.4})`;
-    ctx.lineWidth=0.5;
-    ctx.stroke();
+    // 縮放（SVG 原始是 1080×1080，中心在 540,540）
+    ctx.scale(this.scale, this.scale);
+    ctx.translate(-540, -540);
+    ctx.fillStyle = `hsla(${this.hue},${this.sat}%,${this.lit}%,${a*0.85})`;
+    ctx.fill(ginkgoPath);
     ctx.restore();
   }
 }
 
-// ── 雪（冬）──────────────────────────
-class Snowflake {
-  constructor(){
-    this.reset(true);
-  }
-  reset(init=false){
-    this.x = Math.random() * canvas.width;
-    this.y = init ? Math.random() * canvas.height : -8;
-    // 微斜角，幾乎垂直
-    this.vx = -0.3 + Math.random() * 0.6;
-    this.vy = 0.4 + Math.random() * 0.8;
-    this.size = 1.5 + Math.random() * 3;
-    this.opacity = 0;
-    this.fadeIn = 0.004 + Math.random()*0.004;
-    // 極輕微搖擺
-    this.swayAmp = 3 + Math.random()*5;
-    this.swayFreq = 0.008 + Math.random()*0.01;
-    this.t = Math.random()*1000;
-    this.brightness = 210 + Math.floor(Math.random()*45);
-  }
-  update(){
-    this.t++;
-    this.x += this.vx + Math.sin(this.t*this.swayFreq)*0.2;
-    this.y += this.vy;
-    this.opacity = Math.min(1, this.opacity+this.fadeIn);
-    if(this.y > canvas.height+10) this.reset();
-  }
-  draw(){
-    const alpha = this.opacity * seasonAlpha;
-    if(alpha<=0) return;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
-    ctx.fillStyle=`rgba(${this.brightness},${this.brightness},${this.brightness+15},${alpha*0.55})`;
-    ctx.fill();
-  }
-}
-
-// ── 粒子工廠 ─────────────────────────
-const SEASON_COUNTS = {
-  spring: { Butterfly:6, Petal:14 },
-  summer: { Firefly:22 },
-  autumn: { FallingLeaf:16 },
-  winter: { Snowflake:28 },
+// ═══════════════════════════════════════
+// 季節粒子配置
+// ═══════════════════════════════════════
+const SEASON_CFG = {
+  spring:  { canvas:[{cls:Petal,count:14}],      svgButterly:true },
+  summer:  { canvas:[{cls:Firefly,count:22}],    svgButterly:false },
+  autumn:  { canvas:[{cls:GinkgoLeaf,count:16}], svgButterly:false },
+  winter:  { canvas:[{cls:Snowflake,count:28}],  svgButterly:false },
 };
-const CLASS_MAP = { Butterfly, Petal, Firefly, FallingLeaf, Snowflake };
 
-function buildParticles(season){
-  particles = [];
-  const cfg = SEASON_COUNTS[season] || {};
-  Object.entries(cfg).forEach(([cls, count])=>{
-    for(let i=0;i<count;i++){
-      particles.push(new CLASS_MAP[cls]());
-    }
+let activeSeason = 'spring';
+
+function buildCanvasParticles(season){
+  canvasParticles = [];
+  const cfg = SEASON_CFG[season];
+  if(!cfg) return;
+  cfg.canvas.forEach(({cls,count})=>{
+    for(let i=0;i<count;i++) canvasParticles.push(new cls());
   });
 }
 
-// ── 季節切換 ─────────────────────────
-let seasonFading = false;
 function changeSeason(newSeason){
   if(newSeason === activeSeason) return;
   activeSeason = newSeason;
   updateDots();
-  // 淡出 → 重建 → 淡入
-  seasonFading = true;
+  // 淡出
   let fadeOut = setInterval(()=>{
-    seasonAlpha -= 0.04;
-    if(seasonAlpha <= 0){
-      seasonAlpha = 0;
+    seasonAlpha = Math.max(0, seasonAlpha-0.05);
+    if(seasonAlpha<=0){
       clearInterval(fadeOut);
-      buildParticles(newSeason);
+      // 清蝴蝶
+      clearButterflies();
+      // 重建 canvas 粒子
+      buildCanvasParticles(newSeason);
+      // 春天加蝴蝶
+      if(newSeason==='spring' && svgReady) buildButterflies();
+      // 淡入
       let fadeIn = setInterval(()=>{
-        seasonAlpha += 0.03;
-        if(seasonAlpha >= 1){ seasonAlpha=1; clearInterval(fadeIn); seasonFading=false; }
-      }, 30);
+        seasonAlpha = Math.min(1, seasonAlpha+0.04);
+        if(seasonAlpha>=1) clearInterval(fadeIn);
+      },30);
     }
-  }, 30);
+  },30);
 }
 
-const SEASON_ORDER = ['spring','summer','autumn','winter'];
+const SEASON_ORDER=['spring','summer','autumn','winter'];
 function updateDots(){
-  const idx = SEASON_ORDER.indexOf(activeSeason);
+  const idx=SEASON_ORDER.indexOf(activeSeason);
   document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
 }
 
 // ═══════════════════════════════════════
-// 全景橫移
+// 主 loop
 // ═══════════════════════════════════════
 const TOTAL_DURATION = 160000;
 let startTime=null, paused=false, pauseAccum=0, pauseAt=null;
-let currentDetectedSeason = 'spring';
+let currentDetectedSeason='spring';
 
 function getPanelWidths(){
-  const panels = panorama.querySelectorAll('.panel');
-  return Array.from(panels).slice(0,IMAGES.length).map(p=>p.offsetWidth||window.innerWidth);
+  return Array.from(panorama.querySelectorAll('.panel')).slice(0,IMAGES.length).map(p=>p.offsetWidth||window.innerWidth);
 }
 
 function detectSeason(scrollX, widths){
@@ -461,27 +459,18 @@ function detectSeason(scrollX, widths){
     if(scrollX>=accum && scrollX<accum+w){
       const progress=(scrollX-accum)/w;
       const item=IMAGES[i];
-      const season = (item.next && progress>0.5) ? item.next : item.season;
-      if(season!==currentDetectedSeason){
-        currentDetectedSeason=season;
-        changeSeason(season);
-      }
+      const season=(item.next && progress>0.5)?item.next:item.season;
+      if(season!==currentDetectedSeason){ currentDetectedSeason=season; changeSeason(season); }
       return;
     }
     accum+=w;
   }
 }
 
-// ═══════════════════════════════════════
-// 主 loop
-// ═══════════════════════════════════════
 function loop(ts){
   if(!startTime) startTime=ts;
-
-  // 清畫布
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // 橫移
   if(!paused){
     const widths=getPanelWidths();
     const singleW=widths.reduce((a,b)=>a+b,0);
@@ -494,8 +483,10 @@ function loop(ts){
     }
   }
 
-  // 粒子
-  particles.forEach(p=>{ p.update(); p.draw(); });
+  // Canvas 粒子
+  canvasParticles.forEach(p=>{ p.update(); p.draw(); });
+  // SVG 蝴蝶更新
+  butterflyInstances.forEach(b=>b.update());
 
   requestAnimationFrame(loop);
 }
@@ -504,13 +495,8 @@ function loop(ts){
 // 暫停
 // ═══════════════════════════════════════
 function togglePause(){
-  if(!paused){
-    paused=true; pauseAt=performance.now();
-    document.getElementById('pause-hint').textContent='點擊繼續';
-  } else {
-    paused=false; pauseAccum+=performance.now()-pauseAt;
-    document.getElementById('pause-hint').textContent='點擊暫停';
-  }
+  if(!paused){ paused=true; pauseAt=performance.now(); document.getElementById('pause-hint').textContent='點擊繼續'; }
+  else { paused=false; pauseAccum+=performance.now()-pauseAt; document.getElementById('pause-hint').textContent='點擊暫停'; }
 }
 document.addEventListener('click', togglePause);
 document.addEventListener('touchstart', e=>{ e.preventDefault(); togglePause(); },{passive:false});
@@ -519,22 +505,33 @@ document.addEventListener('touchstart', e=>{ e.preventDefault(); togglePause(); 
 // 游標
 // ═══════════════════════════════════════
 const cursor=document.getElementById('cursor');
-document.addEventListener('mousemove', e=>{
-  cursor.style.left=e.clientX+'px';
-  cursor.style.top=e.clientY+'px';
-});
+document.addEventListener('mousemove', e=>{ cursor.style.left=e.clientX+'px'; cursor.style.top=e.clientY+'px'; });
 
 // ═══════════════════════════════════════
 // 啟動
 // ═══════════════════════════════════════
-window.addEventListener('load',()=>{
+window.addEventListener('load', async ()=>{
+  // 載入 SVG 素材
+  await Promise.all([
+    loadSVG('butterfly1','images/butterfly1.svg'),
+    loadSVG('butterfly2','images/butterfly2.svg'),
+    loadSVG('ginkgo','images/ginkgo.svg'),
+  ]);
+  svgReady = true;
+  buildGinkgoPath();
+
+  // UI 淡入
   setTimeout(()=>{
     document.getElementById('brand').querySelector('img').style.opacity='0.4';
     document.getElementById('guide').style.opacity='1';
     document.getElementById('season-dots').style.opacity='1';
     document.getElementById('pause-hint').style.opacity='1';
   },1500);
-  buildParticles('spring');
+
+  // 初始粒子（春天）
+  buildCanvasParticles('spring');
+  buildButterflies();
+
   requestAnimationFrame(loop);
 });
 </script>
