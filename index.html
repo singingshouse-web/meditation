@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>心映好事 — 靜心空間</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor:none; }
+#scene { position:fixed; inset:0; overflow:hidden; }
+#panorama { position:absolute; top:0; left:0; height:100%; display:flex; will-change:transform; }
+.panel { position:relative; height:100%; flex-shrink:0; }
+.panel img { height:100%; width:auto; display:block; }
+#vignette {
+  position:fixed; inset:0; pointer-events:none; z-index:10;
+  background:radial-gradient(ellipse at center,transparent 35%,rgba(8,5,15,0.35) 70%,rgba(5,3,10,0.75) 100%);
+}
+#edge-mask {
+  position:fixed; inset:0; pointer-events:none; z-index:11;
+  background:linear-gradient(180deg,rgba(8,5,15,0.6) 0%,transparent 10%,transparent 90%,rgba(8,5,15,0.6) 100%);
+}
+#canvas { position:fixed; inset:0; pointer-events:none; z-index:20; }
+
+/* SVG 蝴蝶層 */
+#svg-layer { position:fixed; inset:0; pointer-events:none; z-index:21; overflow:hidden; }
+
+/* 蝴蝶容器：上下飄動 */
+.butterfly-wrap {
+  position:absolute;
+  width:40px; height:40px;
+  transform-origin:center center;
+}
+
+/* 上下飄動軌跡 */
+@keyframes bfFlutter {
+  0%,25%,50%,75%,100% { transform:translate3d(0,0,0); }
+  10%,60%             { transform:translate3d(0,12px,0); }
+  30%,80%             { transform:translate3d(0,4px,0); }
+}
+
+/* 左翅 3D 開合 */
+@keyframes bfLeftWing {
+  0%,100% { transform:rotate3d(0,1,0,60deg); }
+  50%     { transform:rotate3d(0,1,0,-70deg); }
+}
+
+/* 右翅 3D 開合（鏡像） */
+@keyframes bfRightWing {
+  0%,100% { transform:scaleX(-1) rotate3d(0,1,0,60deg); }
+  50%     { transform:scaleX(-1) rotate3d(0,1,0,-70deg); }
+}
+
+/* 蝴蝶本體 */
+.bf-body {
+  position:absolute;
+  width:100%; height:100%;
+  transform-style:preserve-3d;
+  animation:bfFlutter 8s ease-in-out infinite;
+}
+
+/* 翅膀共用 */
+.bf-wing {
+  position:absolute;
+  top:0;
+  width:50%; height:100%;
+  transform-style:preserve-3d;
+  transform-origin:100% 50%; /* 從中間展開 */
+}
+.bf-wing svg {
+  width:100%; height:100%;
+  display:block;
+}
+
+/* 左翅 */
+.bf-wing.left {
+  left:0;
+  transform-origin:100% 50%;
+  animation:bfLeftWing 0.5s ease-in-out infinite;
+}
+
+/* 右翅：鏡像在右側 */
+.bf-wing.right {
+  right:0;
+  transform-origin:0% 50%;
+  animation:bfRightWing 0.5s ease-in-out infinite;
+}
+
+#brand { position:fixed; top:24px; right:28px; z-index:50; pointer-events:none; }
+#brand img { width:72px; opacity:0; filter:brightness(0) invert(1); transition:opacity 2s ease; }
+#guide { position:fixed; bottom:36px; left:50%; transform:translateX(-50%); z-index:50; pointer-events:none; text-align:center; opacity:0; transition:opacity 2s ease; }
+#guide-text {
+  font-family:'Georgia','宋體',serif; font-size:12px; letter-spacing:5px;
+  color:rgba(255,245,250,0.55); white-space:nowrap;
+  animation:breathe 5s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,100%{opacity:0.4;transform:translateY(0);}
+  50%{opacity:0.7;transform:translateY(-3px);}
+}
+#season-dots {
+  position:fixed; bottom:68px; left:50%; transform:translateX(-50%);
+  z-index:50; display:flex; gap:8px; pointer-events:none;
+  opacity:0; transition:opacity 2s ease;
+}
+.dot { width:3px; height:3px; border-radius:50%; background:rgba(255,245,250,0.2); transition:background 1.5s ease,transform 1.5s ease; }
+.dot.active { background:rgba(255,245,250,0.6); transform:scale(1.4); }
+#pause-hint {
+  position:fixed; top:24px; left:28px; z-index:50;
+  font-family:'Georgia',serif; font-size:10px; letter-spacing:3px;
+  color:rgba(255,245,250,0.2); pointer-events:none;
+  opacity:0; transition:opacity 2s ease;
+}
+#cursor { position:fixed; width:5px; height:5px; border-radius:50%; background:rgba(255,240,255,0.35); pointer-events:none; z-index:9999; transform:translate(-50%,-50%); }
+</style>
+</head>
+<body>
+
+<div id="scene"><div id="panorama"></div></div>
+<div id="vignette"></div>
+<div id="edge-mask"></div>
+<canvas id="canvas"></canvas>
+<div id="svg-layer"></div>
+
+<div id="brand"><img src="images/logo.svg" alt="心映好事"></div>
+<div id="season-dots">
+  <div class="dot active"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+</div>
+<div id="guide"><div id="guide-text">讓自己慢下來，再抽一張牌</div></div>
+<div id="pause-hint">點擊暫停</div>
+<div id="cursor"></div>
+
+<script>
+// ═══════════════════════════════════════
+// 圖片清單（暫時用現有4張圖測試，之後換成32張正式版）
+// ═══════════════════════════════════════
+const IMAGES = [
+  {file:'spring.jpg',  season:'spring', w:1920},
+  {file:'spring.jpg',  season:'spring', w:400, transition:true},
+  {file:'spring.jpg',  season:'spring', w:1920},
+  {file:'spring.jpg',  season:'spring', w:400, transition:true, next:'summer'},
+  {file:'summer.jpg',  season:'summer', w:1920},
+  {file:'summer.jpg',  season:'summer', w:400, transition:true},
+  {file:'summer.jpg',  season:'summer', w:1920},
+  {file:'summer.jpg',  season:'summer', w:400, transition:true, next:'autumn'},
+  {file:'autumn.jpg',  season:'autumn', w:1920},
+  {file:'autumn.jpg',  season:'autumn', w:400, transition:true},
+  {file:'autumn.jpg',  season:'autumn', w:1920},
+  {file:'autumn.jpg',  season:'autumn', w:400, transition:true, next:'winter'},
+  {file:'winter.jpg',  season:'winter', w:1920},
+  {file:'winter.jpg',  season:'winter', w:400, transition:true},
+  {file:'winter.jpg',  season:'winter', w:1920},
+  {file:'winter.jpg',  season:'winter', w:400, transition:true, next:'spring'},
+];
+
+const FALLBACK = {
+  spring:'linear-gradient(160deg,#e8d0e8,#f5e0f5,#dcc8e4)',
+  summer:'linear-gradient(160deg,#1a1540,#2a2060,#151030)',
+  autumn:'linear-gradient(160deg,#c89840,#d4b870,#b07820)',
+  winter:'linear-gradient(160deg,#d8e8f4,#eaf4ff,#c8dcea)',
+};
+
+// ═══════════════════════════════════════
+// 建立全景
+// ═══════════════════════════════════════
+const panorama = document.getElementById('panorama');
+[...IMAGES,...IMAGES].forEach((item)=>{
+  const panel = document.createElement('div');
+  panel.className='panel';
+  panel.dataset.season = item.season;
+  if(item.next) panel.dataset.next = item.next;
+  if(item.transition) panel.dataset.transition = '1';
+
+  const img = new Image();
+  img.src=`images/${item.file}`;
+  img.alt=item.season;
+
+  if(item.transition){
+    // 轉場圖：固定 400px 寬
+    panel.style.cssText=`width:400px;height:100%;flex-shrink:0;overflow:hidden;`;
+    img.style.cssText='width:400px;height:100%;object-fit:cover;display:block;';
+    img.onerror=()=>{ img.remove(); panel.style.background=FALLBACK[item.season]; };
+  } else {
+    // 主畫面：依圖片原始比例
+    img.style.cssText='height:100%;width:auto;display:block;';
+    img.onerror=()=>{ img.remove(); panel.style.cssText+=`width:${window.innerWidth}px;background:${FALLBACK[item.season]};`; };
+  }
+  panel.appendChild(img);
+  panorama.appendChild(panel);
+});
+
+// ═══════════════════════════════════════
+// Canvas 粒子（花瓣、螢火蟲、雪）
+// ═══════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+let canvasParticles = [];
+let seasonAlpha = 1;
+
+// ── 花瓣 ──────────────────────────────
+class Petal {
+  constructor(){ this.reset(true); }
+  reset(init=false){
+    this.x=Math.random()*canvas.width;
+    this.y=init?Math.random()*canvas.height:-10;
+    this.vx=-0.5+Math.random()*1.0;
+    this.vy=0.8+Math.random()*1.2;
+    this.rot=Math.random()*Math.PI*2;
+    this.rotSpeed=(Math.random()-0.5)*0.04;
+    this.w=6+Math.random()*6; this.h=this.w*0.55;
+    this.r=225+rnd(20); this.g=150+rnd(50); this.b=170+rnd(40);
+    this.opacity=0; this.fadeIn=0.008+rnd(0.006);
+    this.swayFreq=0.02+rnd(0.02); this.t=rnd(1000);
+  }
+  update(){
+    this.t++; this.x+=this.vx+Math.sin(this.t*this.swayFreq)*0.4; this.y+=this.vy;
+    this.rot+=this.rotSpeed; this.opacity=Math.min(1,this.opacity+this.fadeIn);
+    if(this.y>canvas.height+15) this.reset();
+  }
+  draw(){
+    const a=this.opacity*seasonAlpha; if(a<=0)return;
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.rot);
+    ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${this.r},${this.g},${this.b},${a*0.75})`; ctx.fill(); ctx.restore();
+  }
+}
+
+// ── 螢火蟲 ────────────────────────────
+class Firefly {
+  constructor(){
+    this.x=rnd(canvas.width); this.y=canvas.height*0.3+rnd(canvas.height*0.55);
+    this.vx=0; this.vy=0; this.targetX=this.x; this.targetY=this.y;
+    this.size=2+rnd(3); this.glowPhase=rnd(Math.PI*2); this.glowSpeed=0.02+rnd(0.03);
+    this.changeTimer=0; this.changeInterval=80+Math.floor(rnd(120));
+    this.r=200+Math.floor(rnd(55)); this.g=210+Math.floor(rnd(45)); this.b=80+Math.floor(rnd(80));
+  }
+  update(){
+    this.glowPhase+=this.glowSpeed; this.changeTimer++;
+    if(this.changeTimer>=this.changeInterval){
+      this.changeTimer=0; this.changeInterval=80+Math.floor(rnd(120));
+      const range=60+rnd(80); const angle=rnd(Math.PI*2);
+      this.targetX=Math.max(20,Math.min(canvas.width-20,this.x+Math.cos(angle)*range));
+      this.targetY=Math.max(canvas.height*0.2,Math.min(canvas.height*0.9,this.y+Math.sin(angle)*range*0.5));
+    }
+    this.vx+=(this.targetX-this.x)*0.008; this.vy+=(this.targetY-this.y)*0.008;
+    this.vx*=0.94; this.vy*=0.94; this.x+=this.vx; this.y+=this.vy;
+  }
+  draw(){
+    const glow=0.5+0.5*Math.sin(this.glowPhase); const a=glow*seasonAlpha; if(a<=0)return;
+    ctx.save();
+    const grad=ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.size*5);
+    grad.addColorStop(0,`rgba(${this.r},${this.g},${this.b},${a*0.6})`);
+    grad.addColorStop(1,`rgba(${this.r},${this.g},${this.b},0)`);
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.size*5,0,Math.PI*2);
+    ctx.fillStyle=grad; ctx.fill();
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,220,${a*0.9})`; ctx.fill(); ctx.restore();
+  }
+}
+
+// ── 雪花 ──────────────────────────────
+class Snowflake {
+  constructor(){ this.reset(true); }
+  reset(init=false){
+    this.x=rnd(canvas.width); this.y=init?rnd(canvas.height):-8;
+    this.vx=-0.3+rnd(0.6); this.vy=0.4+rnd(0.8);
+    this.size=1.5+rnd(3); this.opacity=0; this.fadeIn=0.004+rnd(0.004);
+    this.swayFreq=0.008+rnd(0.01); this.t=rnd(1000);
+    this.brightness=210+Math.floor(rnd(45));
+  }
+  update(){
+    this.t++; this.x+=this.vx+Math.sin(this.t*this.swayFreq)*0.2; this.y+=this.vy;
+    this.opacity=Math.min(1,this.opacity+this.fadeIn);
+    if(this.y>canvas.height+10) this.reset();
+  }
+  draw(){
+    const a=this.opacity*seasonAlpha; if(a<=0)return;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${this.brightness},${this.brightness},${this.brightness+15},${a*0.55})`; ctx.fill();
+  }
+}
+
+function rnd(n){ return Math.random()*n; }
+
+// ═══════════════════════════════════════
+// SVG 蝴蝶系統（DOM-based）
+// ═══════════════════════════════════════
+const svgLayer = document.getElementById('svg-layer');
+let butterflyInstances = [];
+let svgReady = false;
+
+// 預載 SVG
+const svgCache = {};
+function loadSVG(name, src){
+  return fetch(src)
+    .then(r => r.text())
+    .then(text => { svgCache[name] = text; })
+    .catch(() => { svgCache[name] = null; });
+}
+
+// 蝴蝶1 觸鬚朝左 → 預設向左飛，向右飛時 scaleX(-1)
+// 蝴蝶2 觸鬚朝右 → 預設向右飛，向左飛時 scaleX(-1)
+const BUTTERFLY_DEFAULT_DIR = { '1': -1, '2': 1 };
+
+class ButterflyDOM {
+  constructor(num){
+    this.num = num; // '1' 或 '2'
+    this.defaultDir = BUTTERFLY_DEFAULT_DIR[num] || 1;
+    this.size = 7 + rnd(3); // 7~10px
+    this.x = rnd(window.innerWidth);
+    this.y = window.innerHeight * (0.62 + rnd(0.28));
+    this.initBezier();
+    this.wingSpeed = 0.4 + rnd(0.3); // 快一點更像真蝴蝶
+    this.maxOpacity = 0.25 + rnd(0.20);
+    this.opacity = 0;
+    this.fadeIn = 0.002 + rnd(0.003);
+    this.el = null;
+    this.alive = true;
+    this._build();
+  }
+
+  initBezier(){
+    const dir = Math.random()>0.5 ? 1 : -1;
+    const dist = 120 + rnd(180);
+    this.bz = {
+      x0:this.x, y0:this.y,
+      cx1:this.x+dir*dist*0.3, cy1:this.y+(-20+rnd(40)),
+      cx2:this.x+dir*dist*0.7, cy2:this.y+(-20+rnd(40)),
+      x1:this.x+dir*dist,      y1:this.y+(-10+rnd(20)),
+    };
+    this.bzT = 0;
+    this.bzSpeed = 0.003 + rnd(0.003);
+    this.flyDir = dir;
+  }
+
+  bezierPoint(t){
+    const {x0,y0,cx1,cy1,cx2,cy2,x1,y1}=this.bz;
+    const m=1-t;
+    return {
+      x:m*m*m*x0+3*m*m*t*cx1+3*m*t*t*cx2+t*t*t*x1,
+      y:m*m*m*y0+3*m*m*t*cy1+3*m*t*t*cy2+t*t*t*y1,
+    };
+  }
+
+  _build(){
+    const leftSvg  = svgCache[`bf${this.num}_left`];
+    const rightSvg = svgCache[`bf${this.num}_right`];
+    const bodySvg  = svgCache[`bf${this.num}_body`];
+    if(!leftSvg || !rightSvg) return;
+
+    const sz = this.size * 2;
+    const wrap = document.createElement('div');
+    wrap.className = 'butterfly-wrap';
+    wrap.style.cssText = `
+      position:absolute;
+      width:${sz}px; height:${sz}px;
+      left:${this.x-this.size}px;
+      top:${this.y-this.size}px;
+      opacity:0;
+      perspective:300px;
+      transform-style:preserve-3d;
+    `;
+
+    // 本體容器（上下飄動）
+    const body = document.createElement('div');
+    body.className = 'bf-body';
+    body.style.animationDelay    = `${-rnd(8)}s`;
+    body.style.animationDuration = `${6+rnd(4)}s`;
+
+    // 左翅
+    const lw = document.createElement('div');
+    lw.className = 'bf-wing left';
+    lw.style.animationDuration = `${this.wingSpeed}s`;
+    lw.style.animationDelay    = `${-rnd(this.wingSpeed)}s`;
+    const lEl = document.createElement('div');
+    lEl.innerHTML = leftSvg;
+    const lSvg = lEl.querySelector('svg');
+    if(lSvg) lSvg.style.cssText='width:100%;height:100%;display:block;';
+    lw.appendChild(lSvg || lEl);
+
+    // 右翅
+    const rw = document.createElement('div');
+    rw.className = 'bf-wing right';
+    rw.style.animationDuration = `${this.wingSpeed}s`;
+    rw.style.animationDelay    = `${-rnd(this.wingSpeed)}s`;
+    const rEl = document.createElement('div');
+    rEl.innerHTML = rightSvg;
+    const rSvg = rEl.querySelector('svg');
+    if(rSvg) rSvg.style.cssText='width:100%;height:100%;display:block;';
+    rw.appendChild(rSvg || rEl);
+
+    // 身體（疊在中間，不做翅膀動畫）
+    if(bodySvg){
+      const bd = document.createElement('div');
+      bd.style.cssText=`position:absolute;top:0;left:25%;width:50%;height:100%;z-index:2;`;
+      const bEl = document.createElement('div');
+      bEl.innerHTML = bodySvg;
+      const bSvg = bEl.querySelector('svg');
+      if(bSvg) bSvg.style.cssText='width:100%;height:100%;display:block;';
+      bd.appendChild(bSvg || bEl);
+      body.appendChild(bd);
+    }
+
+    body.appendChild(lw);
+    body.appendChild(rw);
+    wrap.appendChild(body);
+    svgLayer.appendChild(wrap);
+    this.el = wrap;
+  }
+
+  update(){
+    if(!this.el) return;
+    this.bzT += this.bzSpeed;
+    if(this.bzT >= 1){
+      const pt = this.bezierPoint(1);
+      this.x=pt.x; this.y=pt.y;
+      if(this.x<-50) this.x=window.innerWidth+50;
+      if(this.x>window.innerWidth+50) this.x=-50;
+      this.y=Math.max(window.innerHeight*0.55, Math.min(window.innerHeight*0.92, this.y));
+      this.initBezier();
+      this.bz.x0=this.x; this.bz.y0=this.y;
+      return;
+    }
+    const pt = this.bezierPoint(this.bzT);
+    this.x=pt.x; this.y=pt.y;
+    this.opacity=Math.min(this.maxOpacity, this.opacity+this.fadeIn);
+    const alpha=this.opacity*seasonAlpha;
+    this.el.style.left=(this.x-this.size)+'px';
+    this.el.style.top =(this.y-this.size)+'px';
+    this.el.style.opacity=alpha;
+    const needFlip=(this.flyDir*this.defaultDir)<0;
+    this.el.style.transform=needFlip?'scaleX(-1)':'scaleX(1)';
+  }
+
+  destroy(){
+    if(this.el) this.el.remove();
+    this.alive=false;
+  }
+}
+
+class ButterflyDOM {
+  constructor(svgName){
+    this.svgName = svgName;
+    this.defaultDir = BUTTERFLY_DEFAULT_DIR[svgName] || 1;
+    this.size = 7 + rnd(3); // 約 7~10px，縮小30%
+    // 低空飛行：畫面下方 62%~90%
+    this.x = rnd(window.innerWidth);
+    this.y = window.innerHeight * (0.62 + rnd(0.28));
+    // 貝塞爾路徑飛行
+    this.initBezier();
+    // 翅膀速度跟飛行速度連動
+    this.wingSpeed = 0.8 + rnd(0.8);
+    // 若隱若現：最大透明度 25~45%
+    this.maxOpacity = 0.25 + rnd(0.20);
+    this.opacity = 0;
+    this.fadeIn = 0.002 + rnd(0.003);
+    this.el = null;
+    this.alive = true;
+    this._build();
+  }
+
+  initBezier(){
+    // 目前位置為起點，隨機生成貝塞爾終點和控制點
+    const dir = Math.random()>0.5 ? 1 : -1;
+    const dist = 120 + rnd(180); // 飛行距離
+    this.bz = {
+      x0: this.x, y0: this.y,
+      // 控制點：上下偏移製造弧線
+      cx1: this.x + dir * dist * 0.3, cy1: this.y + (-20 + rnd(40)),
+      cx2: this.x + dir * dist * 0.7, cy2: this.y + (-20 + rnd(40)),
+      x1: this.x + dir * dist,        y1: this.y + (-10 + rnd(20)),
+    };
+    this.bzT = 0;
+    this.bzSpeed = 0.003 + rnd(0.003);
+    // 記錄飛行方向（正=向右，負=向左）
+    this.flyDir = dir;
+  }
+
+  bezierPoint(t){
+    const {x0,y0,cx1,cy1,cx2,cy2,x1,y1} = this.bz;
+    const mt = 1-t;
+    return {
+      x: mt*mt*mt*x0 + 3*mt*mt*t*cx1 + 3*mt*t*t*cx2 + t*t*t*x1,
+      y: mt*mt*mt*y0 + 3*mt*mt*t*cy1 + 3*mt*t*t*cy2 + t*t*t*y1,
+    };
+  }
+
+  _build(){
+    const svg = svgCache[this.svgName];
+    if(!svg) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'butterfly-wrap';
+    wrap.style.cssText = `
+      position:absolute;
+      width:${this.size*2}px;
+      height:${this.size*2}px;
+      left:${this.x - this.size}px;
+      top:${this.y - this.size}px;
+      opacity:0;
+      perspective:200px;
+      transform-style:preserve-3d;
+    `;
+
+    // 蝴蝶本體（上下飄動）
+    const body = document.createElement('div');
+    body.className = 'bf-body';
+    // 隨機飄動延遲，讓每隻蝴蝶不同步
+    body.style.animationDelay = `${-Math.random()*8}s`;
+    body.style.animationDuration = `${6+Math.random()*4}s`;
+
+    // 左翅
+    const leftWing = document.createElement('div');
+    leftWing.className = 'bf-wing left';
+    leftWing.style.animationDuration = `${this.wingSpeed}s`;
+    leftWing.style.animationDelay = `${-Math.random()*this.wingSpeed}s`;
+    const leftSvgEl = document.createElement('div');
+    leftSvgEl.innerHTML = svg;
+    const leftSvgNode = leftSvgEl.querySelector('svg');
+    if(leftSvgNode){
+      leftSvgNode.style.cssText='width:100%;height:100%;';
+    }
+    leftWing.appendChild(leftSvgNode || leftSvgEl);
+
+    // 右翅（同一個 SVG，CSS 鏡像）
+    const rightWing = document.createElement('div');
+    rightWing.className = 'bf-wing right';
+    rightWing.style.animationDuration = `${this.wingSpeed}s`;
+    rightWing.style.animationDelay = `${-Math.random()*this.wingSpeed}s`;
+    const rightSvgEl = document.createElement('div');
+    rightSvgEl.innerHTML = svg;
+    const rightSvgNode = rightSvgEl.querySelector('svg');
+    if(rightSvgNode){
+      rightSvgNode.style.cssText='width:100%;height:100%;';
+    }
+    rightWing.appendChild(rightSvgNode || rightSvgEl);
+
+    body.appendChild(leftWing);
+    body.appendChild(rightWing);
+    wrap.appendChild(body);
+    svgLayer.appendChild(wrap);
+    this.el = wrap;
+  }
+
+  update(){
+    if(!this.el) return;
+    // 貝塞爾路徑推進
+    this.bzT += this.bzSpeed;
+    if(this.bzT >= 1){
+      // 到達終點，設定新的貝塞爾路徑
+      const pt = this.bezierPoint(1);
+      this.x = pt.x; this.y = pt.y;
+      // 邊界穿越
+      if(this.x < -50) this.x = window.innerWidth + 50;
+      if(this.x > window.innerWidth + 50) this.x = -50;
+      // 確保 y 在低空範圍內
+      this.y = Math.max(window.innerHeight*0.55, Math.min(window.innerHeight*0.92, this.y));
+      this.initBezier();
+      this.bz.x0=this.x; this.bz.y0=this.y;
+      return;
+    }
+    const pt = this.bezierPoint(this.bzT);
+    this.x = pt.x; this.y = pt.y;
+    this.opacity = Math.min(this.maxOpacity, this.opacity+this.fadeIn);
+    const alpha = this.opacity * seasonAlpha;
+    this.el.style.left=(this.x-this.size)+'px';
+    this.el.style.top=(this.y-this.size)+'px';
+    this.el.style.opacity=alpha;
+    // 方向：flyDir>0向右，flyDir<0向左
+    // 蝴蝶1預設朝左(defaultDir=-1)：flyDir<0不翻，flyDir>0翻
+    // 蝴蝶2預設朝右(defaultDir=1)：flyDir>0不翻，flyDir<0翻
+    const needFlip = (this.flyDir * this.defaultDir) < 0;
+    this.el.style.transform = needFlip ? 'scaleX(-1)' : 'scaleX(1)';
+  }
+
+  destroy(){
+    if(this.el) this.el.remove();
+    this.alive=false;
+  }
+}
+
+function buildButterflies(){
+  butterflyInstances.forEach(b => b.destroy());
+  butterflyInstances = [];
+  if(!svgCache['bf1_left'] && !svgCache['bf2_left']) return;
+  const count = 3 + Math.floor(Math.random()*2);
+  for(let i=0;i<count;i++){
+    const num = (Math.random()>0.5 && svgCache['bf1_left']) ? '1' :
+                (svgCache['bf2_left'] ? '2' : '1');
+    butterflyInstances.push(new ButterflyDOM(num));
+  }
+}
+
+function clearButterflies(){
+  butterflyInstances.forEach(b => {
+    if(b.el){ b.el.style.transition='opacity 1.5s ease'; b.el.style.opacity='0'; }
+    setTimeout(()=>b.destroy(), 1600);
+  });
+  butterflyInstances = [];
+}
+
+// ═══════════════════════════════════════
+// SVG 銀杏葉系統（Canvas-based，用 Path2D）
+// ═══════════════════════════════════════
+let ginkgoPath = null;
+
+function buildGinkgoPath(){
+  if(!svgCache['ginkgo']) return;
+  // 從 SVG 提取 path d
+  const match = svgCache['ginkgo'].match(/d="([^"]+)"/);
+  if(!match) return;
+  try { ginkgoPath = new Path2D(match[1]); } catch(e){}
+}
+
+class GinkgoLeaf {
+  constructor(){ this.reset(true); }
+  reset(init=false){
+    this.x = rnd(canvas.width);
+    this.y = init ? rnd(canvas.height) : -15;
+    // 斜角飄落
+    this.vx = -1.2 + rnd(2.4);
+    this.vy = 0.9 + rnd(1.6);
+    this.rot = rnd(Math.PI*2);
+    this.rotSpeed = (Math.random()-0.5) * 0.07;
+    // SVG viewBox 是 1080×1080，縮小到 20-35px
+    this.scale = (0.018 + rnd(0.014));
+    this.opacity = 0; this.fadeIn = 0.006+rnd(0.006);
+    this.swayFreq = 0.015+rnd(0.015); this.t = rnd(1000);
+    // 色調微變：原色 #f5c74f 基礎上做微調
+    this.hue = 42 + rnd(12); // 橘黃系
+    this.sat = 85 + rnd(10);
+    this.lit = 60 + rnd(10);
+  }
+  update(){
+    this.t++; this.x+=this.vx+Math.sin(this.t*this.swayFreq)*0.5; this.y+=this.vy;
+    this.rot+=this.rotSpeed; this.opacity=Math.min(1,this.opacity+this.fadeIn);
+    if(this.y>canvas.height+20) this.reset();
+  }
+  draw(){
+    const a = this.opacity * seasonAlpha; if(a<=0||!ginkgoPath) return;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    // 縮放（SVG 原始是 1080×1080，中心在 540,540）
+    ctx.scale(this.scale, this.scale);
+    ctx.translate(-540, -540);
+    ctx.fillStyle = `hsla(${this.hue},${this.sat}%,${this.lit}%,${a*0.85})`;
+    ctx.fill(ginkgoPath);
+    ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════
+// 季節粒子配置
+// ═══════════════════════════════════════
+const SEASON_CFG = {
+  spring:  { canvas:[{cls:Petal,count:14}],      svgButterly:true },
+  summer:  { canvas:[{cls:Firefly,count:22}],    svgButterly:false },
+  autumn:  { canvas:[{cls:GinkgoLeaf,count:16}], svgButterly:false },
+  winter:  { canvas:[{cls:Snowflake,count:28}],  svgButterly:false },
+};
+
+let activeSeason = 'spring';
+
+function buildCanvasParticles(season){
+  canvasParticles = [];
+  const cfg = SEASON_CFG[season];
+  if(!cfg) return;
+  cfg.canvas.forEach(({cls,count})=>{
+    for(let i=0;i<count;i++) canvasParticles.push(new cls());
+  });
+}
+
+function changeSeason(newSeason){
+  if(newSeason === activeSeason) return;
+  activeSeason = newSeason;
+  updateDots();
+  // 淡出
+  let fadeOut = setInterval(()=>{
+    seasonAlpha = Math.max(0, seasonAlpha-0.05);
+    if(seasonAlpha<=0){
+      clearInterval(fadeOut);
+      // 清蝴蝶
+      clearButterflies();
+      // 重建 canvas 粒子
+      buildCanvasParticles(newSeason);
+      // 春天加蝴蝶
+      if(newSeason==='spring' && svgReady) buildButterflies();
+      // 淡入
+      let fadeIn = setInterval(()=>{
+        seasonAlpha = Math.min(1, seasonAlpha+0.04);
+        if(seasonAlpha>=1) clearInterval(fadeIn);
+      },30);
+    }
+  },30);
+}
+
+const SEASON_ORDER=['spring','summer','autumn','winter'];
+function updateDots(){
+  const idx=SEASON_ORDER.indexOf(activeSeason);
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+}
+
+// ═══════════════════════════════════════
+// 主 loop
+// ═══════════════════════════════════════
+const TOTAL_DURATION = 160000;
+let startTime=null, paused=false, pauseAccum=0, pauseAt=null;
+let currentDetectedSeason='spring';
+
+function getPanelWidths(){
+  return Array.from(panorama.querySelectorAll('.panel')).slice(0,IMAGES.length).map(p=>p.offsetWidth||window.innerWidth);
+}
+
+function detectSeason(scrollX, widths){
+  let accum=0;
+  for(let i=0;i<IMAGES.length;i++){
+    const w=widths[i];
+    if(scrollX>=accum && scrollX<accum+w){
+      const progress=(scrollX-accum)/w;
+      const item=IMAGES[i];
+      const season=(item.next && progress>0.5)?item.next:item.season;
+      if(season!==currentDetectedSeason){ currentDetectedSeason=season; changeSeason(season); }
+      return;
+    }
+    accum+=w;
+  }
+}
+
+function loop(ts){
+  if(!startTime) startTime=ts;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(!paused){
+    const widths=getPanelWidths();
+    const singleW=widths.reduce((a,b)=>a+b,0);
+    if(singleW>0){
+      const elapsed=(ts-startTime)-pauseAccum;
+      const progress=(elapsed%TOTAL_DURATION)/TOTAL_DURATION;
+      const x=-(progress*singleW);
+      panorama.style.transform=`translateX(${x}px)`;
+      detectSeason(Math.abs(x),widths);
+    }
+  }
+
+  // Canvas 粒子
+  canvasParticles.forEach(p=>{ p.update(); p.draw(); });
+  // SVG 蝴蝶更新
+  butterflyInstances.forEach(b=>b.update());
+
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════
+// 暫停
+// ═══════════════════════════════════════
+function togglePause(){
+  if(!paused){ paused=true; pauseAt=performance.now(); document.getElementById('pause-hint').textContent='點擊繼續'; }
+  else { paused=false; pauseAccum+=performance.now()-pauseAt; document.getElementById('pause-hint').textContent='點擊暫停'; }
+}
+document.addEventListener('click', togglePause);
+document.addEventListener('touchstart', e=>{ e.preventDefault(); togglePause(); },{passive:false});
+
+// ═══════════════════════════════════════
+// 游標
+// ═══════════════════════════════════════
+const cursor=document.getElementById('cursor');
+document.addEventListener('mousemove', e=>{ cursor.style.left=e.clientX+'px'; cursor.style.top=e.clientY+'px'; });
+
+// ═══════════════════════════════════════
+// 啟動
+// ═══════════════════════════════════════
+window.addEventListener('load', async ()=>{
+  // 載入 SVG 素材
+  await Promise.all([
+    loadSVG('bf1_left',  'images/butterfly1_left.svg'),
+    loadSVG('bf1_right', 'images/butterfly1_right.svg'),
+    loadSVG('bf1_body',  'images/butterfly1_body.svg'),
+    loadSVG('bf2_left',  'images/butterfly2_left.svg'),
+    loadSVG('bf2_right', 'images/butterfly2_right.svg'),
+    loadSVG('bf2_body',  'images/butterfly2_body.svg'),
+    loadSVG('ginkgo',    'images/ginkgo.svg'),
+  ]);
+  svgReady = true;
+  buildGinkgoPath();
+
+  // UI 淡入
+  setTimeout(()=>{
+    document.getElementById('brand').querySelector('img').style.opacity='0.4';
+    document.getElementById('guide').style.opacity='1';
+    document.getElementById('season-dots').style.opacity='1';
+    document.getElementById('pause-hint').style.opacity='1';
+  },1500);
+
+  // 初始粒子（春天）
+  buildCanvasParticles('spring');
+  buildButterflies();
+
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
