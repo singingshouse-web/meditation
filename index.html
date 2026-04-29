@@ -134,45 +134,25 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 
 <script>
 // ═══════════════════════════════════════
-// 圖片清單（主畫面1920px + 轉場400px交錯）
+// 圖片清單（暫時用現有4張圖測試，之後換成32張正式版）
 // ═══════════════════════════════════════
 const IMAGES = [
-  // 春
-  {file:'spring1.jpg',   season:'spring', w:1920},
-  {file:'spring_t1.jpg', season:'spring', w:400,  transition:true},
-  {file:'spring2.jpg',   season:'spring', w:1920},
-  {file:'spring_t2.jpg', season:'spring', w:400,  transition:true},
-  {file:'spring3.jpg',   season:'spring', w:1920},
-  {file:'spring_t3.jpg', season:'spring', w:400,  transition:true},
-  {file:'spring4.jpg',   season:'spring', w:1920},
-  {file:'spring_t4.jpg', season:'spring', w:400,  transition:true, next:'summer'},
-  // 夏
-  {file:'summer1.jpg',   season:'summer', w:1920},
-  {file:'summer_t1.jpg', season:'summer', w:400,  transition:true},
-  {file:'summer2.jpg',   season:'summer', w:1920},
-  {file:'summer_t2.jpg', season:'summer', w:400,  transition:true},
-  {file:'summer3.jpg',   season:'summer', w:1920},
-  {file:'summer_t3.jpg', season:'summer', w:400,  transition:true},
-  {file:'summer4.jpg',   season:'summer', w:1920},
-  {file:'summer_t4.jpg', season:'summer', w:400,  transition:true, next:'autumn'},
-  // 秋
-  {file:'autumn1.jpg',   season:'autumn', w:1920},
-  {file:'autumn_t1.jpg', season:'autumn', w:400,  transition:true},
-  {file:'autumn2.jpg',   season:'autumn', w:1920},
-  {file:'autumn_t2.jpg', season:'autumn', w:400,  transition:true},
-  {file:'autumn3.jpg',   season:'autumn', w:1920},
-  {file:'autumn_t3.jpg', season:'autumn', w:400,  transition:true},
-  {file:'autumn4.jpg',   season:'autumn', w:1920},
-  {file:'autumn_t4.jpg', season:'autumn', w:400,  transition:true, next:'winter'},
-  // 冬
-  {file:'winter1.jpg',   season:'winter', w:1920},
-  {file:'winter_t1.jpg', season:'winter', w:400,  transition:true},
-  {file:'winter2.jpg',   season:'winter', w:1920},
-  {file:'winter_t2.jpg', season:'winter', w:400,  transition:true},
-  {file:'winter3.jpg',   season:'winter', w:1920},
-  {file:'winter_t3.jpg', season:'winter', w:400,  transition:true},
-  {file:'winter4.jpg',   season:'winter', w:1920},
-  {file:'winter_t4.jpg', season:'winter', w:400,  transition:true, next:'spring'},
+  {file:'spring.jpg',  season:'spring', w:1920},
+  {file:'spring.jpg',  season:'spring', w:400, transition:true},
+  {file:'spring.jpg',  season:'spring', w:1920},
+  {file:'spring.jpg',  season:'spring', w:400, transition:true, next:'summer'},
+  {file:'summer.jpg',  season:'summer', w:1920},
+  {file:'summer.jpg',  season:'summer', w:400, transition:true},
+  {file:'summer.jpg',  season:'summer', w:1920},
+  {file:'summer.jpg',  season:'summer', w:400, transition:true, next:'autumn'},
+  {file:'autumn.jpg',  season:'autumn', w:1920},
+  {file:'autumn.jpg',  season:'autumn', w:400, transition:true},
+  {file:'autumn.jpg',  season:'autumn', w:1920},
+  {file:'autumn.jpg',  season:'autumn', w:400, transition:true, next:'winter'},
+  {file:'winter.jpg',  season:'winter', w:1920},
+  {file:'winter.jpg',  season:'winter', w:400, transition:true},
+  {file:'winter.jpg',  season:'winter', w:1920},
+  {file:'winter.jpg',  season:'winter', w:400, transition:true, next:'spring'},
 ];
 
 const FALLBACK = {
