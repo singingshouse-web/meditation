@@ -21,16 +21,68 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 }
 #canvas { position:fixed; inset:0; pointer-events:none; z-index:20; }
 
-/* SVG 蝴蝶容器 */
+/* SVG 蝴蝶層 */
 #svg-layer { position:fixed; inset:0; pointer-events:none; z-index:21; overflow:hidden; }
+
+/* 蝴蝶容器：上下飄動 */
 .butterfly-wrap {
   position:absolute;
+  width:40px; height:40px;
   transform-origin:center center;
 }
-/* 翅膀開合動畫 */
-@keyframes wingFlap {
-  0%,100% { transform:scaleX(1); }
-  50%     { transform:scaleX(0.15); }
+
+/* 上下飄動軌跡 */
+@keyframes bfFlutter {
+  0%,25%,50%,75%,100% { transform:translate3d(0,0,0); }
+  10%,60%             { transform:translate3d(0,12px,0); }
+  30%,80%             { transform:translate3d(0,4px,0); }
+}
+
+/* 左翅 3D 開合 */
+@keyframes bfLeftWing {
+  0%,100% { transform:rotate3d(0,1,0,60deg); }
+  50%     { transform:rotate3d(0,1,0,-70deg); }
+}
+
+/* 右翅 3D 開合（鏡像） */
+@keyframes bfRightWing {
+  0%,100% { transform:scaleX(-1) rotate3d(0,1,0,60deg); }
+  50%     { transform:scaleX(-1) rotate3d(0,1,0,-70deg); }
+}
+
+/* 蝴蝶本體 */
+.bf-body {
+  position:absolute;
+  width:100%; height:100%;
+  transform-style:preserve-3d;
+  animation:bfFlutter 8s ease-in-out infinite;
+}
+
+/* 翅膀共用 */
+.bf-wing {
+  position:absolute;
+  top:0;
+  width:50%; height:100%;
+  transform-style:preserve-3d;
+  transform-origin:100% 50%; /* 從中間展開 */
+}
+.bf-wing svg {
+  width:100%; height:100%;
+  display:block;
+}
+
+/* 左翅 */
+.bf-wing.left {
+  left:0;
+  transform-origin:100% 50%;
+  animation:bfLeftWing 0.5s ease-in-out infinite;
+}
+
+/* 右翅：鏡像在右側 */
+.bf-wing.right {
+  right:0;
+  transform-origin:0% 50%;
+  animation:bfRightWing 0.5s ease-in-out infinite;
 }
 
 #brand { position:fixed; top:24px; right:28px; z-index:50; pointer-events:none; }
@@ -82,25 +134,45 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 
 <script>
 // ═══════════════════════════════════════
-// 圖片清單
+// 圖片清單（主畫面1920px + 轉場400px交錯）
 // ═══════════════════════════════════════
 const IMAGES = [
-  {file:'spring1.jpg',season:'spring'},
-  {file:'spring2.jpg',season:'spring'},
-  {file:'spring3.jpg',season:'spring'},
-  {file:'spring4.jpg',season:'spring', next:'summer'},
-  {file:'summer1.jpg',season:'summer'},
-  {file:'summer2.jpg',season:'summer'},
-  {file:'summer3.jpg',season:'summer'},
-  {file:'summer4.jpg',season:'summer', next:'autumn'},
-  {file:'autumn1.jpg',season:'autumn'},
-  {file:'autumn2.jpg',season:'autumn'},
-  {file:'autumn3.jpg',season:'autumn'},
-  {file:'autumn4.jpg',season:'autumn', next:'winter'},
-  {file:'winter1.jpg',season:'winter'},
-  {file:'winter2.jpg',season:'winter'},
-  {file:'winter3.jpg',season:'winter'},
-  {file:'winter4.jpg',season:'winter', next:'spring'},
+  // 春
+  {file:'spring1.jpg',   season:'spring', w:1920},
+  {file:'spring_t1.jpg', season:'spring', w:400,  transition:true},
+  {file:'spring2.jpg',   season:'spring', w:1920},
+  {file:'spring_t2.jpg', season:'spring', w:400,  transition:true},
+  {file:'spring3.jpg',   season:'spring', w:1920},
+  {file:'spring_t3.jpg', season:'spring', w:400,  transition:true},
+  {file:'spring4.jpg',   season:'spring', w:1920},
+  {file:'spring_t4.jpg', season:'spring', w:400,  transition:true, next:'summer'},
+  // 夏
+  {file:'summer1.jpg',   season:'summer', w:1920},
+  {file:'summer_t1.jpg', season:'summer', w:400,  transition:true},
+  {file:'summer2.jpg',   season:'summer', w:1920},
+  {file:'summer_t2.jpg', season:'summer', w:400,  transition:true},
+  {file:'summer3.jpg',   season:'summer', w:1920},
+  {file:'summer_t3.jpg', season:'summer', w:400,  transition:true},
+  {file:'summer4.jpg',   season:'summer', w:1920},
+  {file:'summer_t4.jpg', season:'summer', w:400,  transition:true, next:'autumn'},
+  // 秋
+  {file:'autumn1.jpg',   season:'autumn', w:1920},
+  {file:'autumn_t1.jpg', season:'autumn', w:400,  transition:true},
+  {file:'autumn2.jpg',   season:'autumn', w:1920},
+  {file:'autumn_t2.jpg', season:'autumn', w:400,  transition:true},
+  {file:'autumn3.jpg',   season:'autumn', w:1920},
+  {file:'autumn_t3.jpg', season:'autumn', w:400,  transition:true},
+  {file:'autumn4.jpg',   season:'autumn', w:1920},
+  {file:'autumn_t4.jpg', season:'autumn', w:400,  transition:true, next:'winter'},
+  // 冬
+  {file:'winter1.jpg',   season:'winter', w:1920},
+  {file:'winter_t1.jpg', season:'winter', w:400,  transition:true},
+  {file:'winter2.jpg',   season:'winter', w:1920},
+  {file:'winter_t2.jpg', season:'winter', w:400,  transition:true},
+  {file:'winter3.jpg',   season:'winter', w:1920},
+  {file:'winter_t3.jpg', season:'winter', w:400,  transition:true},
+  {file:'winter4.jpg',   season:'winter', w:1920},
+  {file:'winter_t4.jpg', season:'winter', w:400,  transition:true, next:'spring'},
 ];
 
 const FALLBACK = {
@@ -119,11 +191,22 @@ const panorama = document.getElementById('panorama');
   panel.className='panel';
   panel.dataset.season = item.season;
   if(item.next) panel.dataset.next = item.next;
+  if(item.transition) panel.dataset.transition = '1';
+
   const img = new Image();
   img.src=`images/${item.file}`;
   img.alt=item.season;
-  img.style.cssText='height:100%;width:auto;display:block;';
-  img.onerror=()=>{ img.remove(); panel.style.cssText+=`width:${window.innerWidth}px;background:${FALLBACK[item.season]};`; };
+
+  if(item.transition){
+    // 轉場圖：固定 400px 寬
+    panel.style.cssText=`width:400px;height:100%;flex-shrink:0;overflow:hidden;`;
+    img.style.cssText='width:400px;height:100%;object-fit:cover;display:block;';
+    img.onerror=()=>{ img.remove(); panel.style.background=FALLBACK[item.season]; };
+  } else {
+    // 主畫面：依圖片原始比例
+    img.style.cssText='height:100%;width:auto;display:block;';
+    img.onerror=()=>{ img.remove(); panel.style.cssText+=`width:${window.innerWidth}px;background:${FALLBACK[item.season]};`; };
+  }
   panel.appendChild(img);
   panorama.appendChild(panel);
 });
@@ -241,40 +324,197 @@ function loadSVG(name, src){
     .catch(() => { svgCache[name] = null; });
 }
 
-// 蝴蝶物理狀態
-// 蝴蝶1 觸鬚朝左 → 預設向左飛（vx<0），向右飛時 scaleX(-1)
-// 蝴蝶2 觸鬚朝右 → 預設向右飛（vx>0），向左飛時 scaleX(-1)
-const BUTTERFLY_DEFAULT_DIR = { butterfly1: -1, butterfly2: 1 };
+// 蝴蝶1 觸鬚朝左 → 預設向左飛，向右飛時 scaleX(-1)
+// 蝴蝶2 觸鬚朝右 → 預設向右飛，向左飛時 scaleX(-1)
+const BUTTERFLY_DEFAULT_DIR = { '1': -1, '2': 1 };
+
+class ButterflyDOM {
+  constructor(num){
+    this.num = num; // '1' 或 '2'
+    this.defaultDir = BUTTERFLY_DEFAULT_DIR[num] || 1;
+    this.size = 7 + rnd(3); // 7~10px
+    this.x = rnd(window.innerWidth);
+    this.y = window.innerHeight * (0.62 + rnd(0.28));
+    this.initBezier();
+    this.wingSpeed = 0.4 + rnd(0.3); // 快一點更像真蝴蝶
+    this.maxOpacity = 0.25 + rnd(0.20);
+    this.opacity = 0;
+    this.fadeIn = 0.002 + rnd(0.003);
+    this.el = null;
+    this.alive = true;
+    this._build();
+  }
+
+  initBezier(){
+    const dir = Math.random()>0.5 ? 1 : -1;
+    const dist = 120 + rnd(180);
+    this.bz = {
+      x0:this.x, y0:this.y,
+      cx1:this.x+dir*dist*0.3, cy1:this.y+(-20+rnd(40)),
+      cx2:this.x+dir*dist*0.7, cy2:this.y+(-20+rnd(40)),
+      x1:this.x+dir*dist,      y1:this.y+(-10+rnd(20)),
+    };
+    this.bzT = 0;
+    this.bzSpeed = 0.003 + rnd(0.003);
+    this.flyDir = dir;
+  }
+
+  bezierPoint(t){
+    const {x0,y0,cx1,cy1,cx2,cy2,x1,y1}=this.bz;
+    const m=1-t;
+    return {
+      x:m*m*m*x0+3*m*m*t*cx1+3*m*t*t*cx2+t*t*t*x1,
+      y:m*m*m*y0+3*m*m*t*cy1+3*m*t*t*cy2+t*t*t*y1,
+    };
+  }
+
+  _build(){
+    const leftSvg  = svgCache[`bf${this.num}_left`];
+    const rightSvg = svgCache[`bf${this.num}_right`];
+    const bodySvg  = svgCache[`bf${this.num}_body`];
+    if(!leftSvg || !rightSvg) return;
+
+    const sz = this.size * 2;
+    const wrap = document.createElement('div');
+    wrap.className = 'butterfly-wrap';
+    wrap.style.cssText = `
+      position:absolute;
+      width:${sz}px; height:${sz}px;
+      left:${this.x-this.size}px;
+      top:${this.y-this.size}px;
+      opacity:0;
+      perspective:300px;
+      transform-style:preserve-3d;
+    `;
+
+    // 本體容器（上下飄動）
+    const body = document.createElement('div');
+    body.className = 'bf-body';
+    body.style.animationDelay    = `${-rnd(8)}s`;
+    body.style.animationDuration = `${6+rnd(4)}s`;
+
+    // 左翅
+    const lw = document.createElement('div');
+    lw.className = 'bf-wing left';
+    lw.style.animationDuration = `${this.wingSpeed}s`;
+    lw.style.animationDelay    = `${-rnd(this.wingSpeed)}s`;
+    const lEl = document.createElement('div');
+    lEl.innerHTML = leftSvg;
+    const lSvg = lEl.querySelector('svg');
+    if(lSvg) lSvg.style.cssText='width:100%;height:100%;display:block;';
+    lw.appendChild(lSvg || lEl);
+
+    // 右翅
+    const rw = document.createElement('div');
+    rw.className = 'bf-wing right';
+    rw.style.animationDuration = `${this.wingSpeed}s`;
+    rw.style.animationDelay    = `${-rnd(this.wingSpeed)}s`;
+    const rEl = document.createElement('div');
+    rEl.innerHTML = rightSvg;
+    const rSvg = rEl.querySelector('svg');
+    if(rSvg) rSvg.style.cssText='width:100%;height:100%;display:block;';
+    rw.appendChild(rSvg || rEl);
+
+    // 身體（疊在中間，不做翅膀動畫）
+    if(bodySvg){
+      const bd = document.createElement('div');
+      bd.style.cssText=`position:absolute;top:0;left:25%;width:50%;height:100%;z-index:2;`;
+      const bEl = document.createElement('div');
+      bEl.innerHTML = bodySvg;
+      const bSvg = bEl.querySelector('svg');
+      if(bSvg) bSvg.style.cssText='width:100%;height:100%;display:block;';
+      bd.appendChild(bSvg || bEl);
+      body.appendChild(bd);
+    }
+
+    body.appendChild(lw);
+    body.appendChild(rw);
+    wrap.appendChild(body);
+    svgLayer.appendChild(wrap);
+    this.el = wrap;
+  }
+
+  update(){
+    if(!this.el) return;
+    this.bzT += this.bzSpeed;
+    if(this.bzT >= 1){
+      const pt = this.bezierPoint(1);
+      this.x=pt.x; this.y=pt.y;
+      if(this.x<-50) this.x=window.innerWidth+50;
+      if(this.x>window.innerWidth+50) this.x=-50;
+      this.y=Math.max(window.innerHeight*0.55, Math.min(window.innerHeight*0.92, this.y));
+      this.initBezier();
+      this.bz.x0=this.x; this.bz.y0=this.y;
+      return;
+    }
+    const pt = this.bezierPoint(this.bzT);
+    this.x=pt.x; this.y=pt.y;
+    this.opacity=Math.min(this.maxOpacity, this.opacity+this.fadeIn);
+    const alpha=this.opacity*seasonAlpha;
+    this.el.style.left=(this.x-this.size)+'px';
+    this.el.style.top =(this.y-this.size)+'px';
+    this.el.style.opacity=alpha;
+    const needFlip=(this.flyDir*this.defaultDir)<0;
+    this.el.style.transform=needFlip?'scaleX(-1)':'scaleX(1)';
+  }
+
+  destroy(){
+    if(this.el) this.el.remove();
+    this.alive=false;
+  }
+}
 
 class ButterflyDOM {
   constructor(svgName){
     this.svgName = svgName;
     this.defaultDir = BUTTERFLY_DEFAULT_DIR[svgName] || 1;
-    // 縮小到 20%：約 10~14px 顯示大小
-    this.size = 10 + rnd(4);
-    // 低空飛行：畫面下方 60%~90%
+    this.size = 7 + rnd(3); // 約 7~10px，縮小30%
+    // 低空飛行：畫面下方 62%~90%
     this.x = rnd(window.innerWidth);
-    this.y = window.innerHeight * (0.60 + rnd(0.30));
-    this.baseY = this.y;
-    // 亂數左右飛，速度很慢
-    this.vx = (Math.random()>0.5?1:-1) * (0.3 + rnd(0.4));
-    // 上下微幅震盪
-    this.swayAmp = 5 + rnd(8);
-    this.swayFreq = 0.006 + rnd(0.006);
-    this.t = rnd(1000);
-    // 翅膀速度
-    this.wingSpeed = 1.2 + rnd(1.0);
-    // 若隱若現：最大透明度只到 0.5
-    this.maxOpacity = 0.3 + rnd(0.25);
+    this.y = window.innerHeight * (0.62 + rnd(0.28));
+    // 貝塞爾路徑飛行
+    this.initBezier();
+    // 翅膀速度跟飛行速度連動
+    this.wingSpeed = 0.8 + rnd(0.8);
+    // 若隱若現：最大透明度 25~45%
+    this.maxOpacity = 0.25 + rnd(0.20);
     this.opacity = 0;
-    this.fadeIn = 0.003 + rnd(0.003);
+    this.fadeIn = 0.002 + rnd(0.003);
     this.el = null;
     this.alive = true;
     this._build();
   }
+
+  initBezier(){
+    // 目前位置為起點，隨機生成貝塞爾終點和控制點
+    const dir = Math.random()>0.5 ? 1 : -1;
+    const dist = 120 + rnd(180); // 飛行距離
+    this.bz = {
+      x0: this.x, y0: this.y,
+      // 控制點：上下偏移製造弧線
+      cx1: this.x + dir * dist * 0.3, cy1: this.y + (-20 + rnd(40)),
+      cx2: this.x + dir * dist * 0.7, cy2: this.y + (-20 + rnd(40)),
+      x1: this.x + dir * dist,        y1: this.y + (-10 + rnd(20)),
+    };
+    this.bzT = 0;
+    this.bzSpeed = 0.003 + rnd(0.003);
+    // 記錄飛行方向（正=向右，負=向左）
+    this.flyDir = dir;
+  }
+
+  bezierPoint(t){
+    const {x0,y0,cx1,cy1,cx2,cy2,x1,y1} = this.bz;
+    const mt = 1-t;
+    return {
+      x: mt*mt*mt*x0 + 3*mt*mt*t*cx1 + 3*mt*t*t*cx2 + t*t*t*x1,
+      y: mt*mt*mt*y0 + 3*mt*mt*t*cy1 + 3*mt*t*t*cy2 + t*t*t*y1,
+    };
+  }
+
   _build(){
     const svg = svgCache[this.svgName];
     if(!svg) return;
+
     const wrap = document.createElement('div');
     wrap.className = 'butterfly-wrap';
     wrap.style.cssText = `
@@ -284,54 +524,96 @@ class ButterflyDOM {
       left:${this.x - this.size}px;
       top:${this.y - this.size}px;
       opacity:0;
-      transform-origin:center center;
+      perspective:200px;
+      transform-style:preserve-3d;
     `;
-    const svgEl = document.createElement('div');
-    svgEl.innerHTML = svg;
-    const svgNode = svgEl.querySelector('svg');
-    if(svgNode){
-      svgNode.style.cssText = `width:100%;height:100%;`;
-      svgNode.style.animation = `wingFlap ${this.wingSpeed}s ease-in-out infinite`;
-      svgNode.style.transformOrigin = 'center center';
+
+    // 蝴蝶本體（上下飄動）
+    const body = document.createElement('div');
+    body.className = 'bf-body';
+    // 隨機飄動延遲，讓每隻蝴蝶不同步
+    body.style.animationDelay = `${-Math.random()*8}s`;
+    body.style.animationDuration = `${6+Math.random()*4}s`;
+
+    // 左翅
+    const leftWing = document.createElement('div');
+    leftWing.className = 'bf-wing left';
+    leftWing.style.animationDuration = `${this.wingSpeed}s`;
+    leftWing.style.animationDelay = `${-Math.random()*this.wingSpeed}s`;
+    const leftSvgEl = document.createElement('div');
+    leftSvgEl.innerHTML = svg;
+    const leftSvgNode = leftSvgEl.querySelector('svg');
+    if(leftSvgNode){
+      leftSvgNode.style.cssText='width:100%;height:100%;';
     }
-    wrap.appendChild(svgNode || svgEl);
+    leftWing.appendChild(leftSvgNode || leftSvgEl);
+
+    // 右翅（同一個 SVG，CSS 鏡像）
+    const rightWing = document.createElement('div');
+    rightWing.className = 'bf-wing right';
+    rightWing.style.animationDuration = `${this.wingSpeed}s`;
+    rightWing.style.animationDelay = `${-Math.random()*this.wingSpeed}s`;
+    const rightSvgEl = document.createElement('div');
+    rightSvgEl.innerHTML = svg;
+    const rightSvgNode = rightSvgEl.querySelector('svg');
+    if(rightSvgNode){
+      rightSvgNode.style.cssText='width:100%;height:100%;';
+    }
+    rightWing.appendChild(rightSvgNode || rightSvgEl);
+
+    body.appendChild(leftWing);
+    body.appendChild(rightWing);
+    wrap.appendChild(body);
     svgLayer.appendChild(wrap);
     this.el = wrap;
   }
+
   update(){
     if(!this.el) return;
-    this.t++;
-    this.x += this.vx;
-    this.y = this.baseY + Math.sin(this.t * this.swayFreq) * this.swayAmp;
-    // 邊界穿越
-    if(this.x < -this.size*3) this.x = window.innerWidth + this.size;
-    if(this.x > window.innerWidth + this.size*3) this.x = -this.size;
-    this.opacity = Math.min(this.maxOpacity, this.opacity + this.fadeIn);
+    // 貝塞爾路徑推進
+    this.bzT += this.bzSpeed;
+    if(this.bzT >= 1){
+      // 到達終點，設定新的貝塞爾路徑
+      const pt = this.bezierPoint(1);
+      this.x = pt.x; this.y = pt.y;
+      // 邊界穿越
+      if(this.x < -50) this.x = window.innerWidth + 50;
+      if(this.x > window.innerWidth + 50) this.x = -50;
+      // 確保 y 在低空範圍內
+      this.y = Math.max(window.innerHeight*0.55, Math.min(window.innerHeight*0.92, this.y));
+      this.initBezier();
+      this.bz.x0=this.x; this.bz.y0=this.y;
+      return;
+    }
+    const pt = this.bezierPoint(this.bzT);
+    this.x = pt.x; this.y = pt.y;
+    this.opacity = Math.min(this.maxOpacity, this.opacity+this.fadeIn);
     const alpha = this.opacity * seasonAlpha;
-    this.el.style.left = (this.x - this.size) + 'px';
-    this.el.style.top  = (this.y - this.size) + 'px';
-    this.el.style.opacity = alpha;
-    // 方向判斷：
-    // 蝴蝶1(預設朝左)：vx<0向左飛不翻，vx>0向右飛翻轉
-    // 蝴蝶2(預設朝右)：vx>0向右飛不翻，vx<0向左飛翻轉
-    const needFlip = (this.vx * this.defaultDir) < 0;
+    this.el.style.left=(this.x-this.size)+'px';
+    this.el.style.top=(this.y-this.size)+'px';
+    this.el.style.opacity=alpha;
+    // 方向：flyDir>0向右，flyDir<0向左
+    // 蝴蝶1預設朝左(defaultDir=-1)：flyDir<0不翻，flyDir>0翻
+    // 蝴蝶2預設朝右(defaultDir=1)：flyDir>0不翻，flyDir<0翻
+    const needFlip = (this.flyDir * this.defaultDir) < 0;
     this.el.style.transform = needFlip ? 'scaleX(-1)' : 'scaleX(1)';
   }
+
   destroy(){
     if(this.el) this.el.remove();
-    this.alive = false;
+    this.alive=false;
   }
 }
 
 function buildButterflies(){
   butterflyInstances.forEach(b => b.destroy());
   butterflyInstances = [];
-  if(!svgCache['butterfly1'] && !svgCache['butterfly2']) return;
-  const count = 3 + Math.floor(Math.random()*2); // 3~4隻
+  if(!svgCache['bf1_left'] && !svgCache['bf2_left']) return;
+  const count = 3 + Math.floor(Math.random()*2);
   for(let i=0;i<count;i++){
-    const name = (Math.random()>0.5 && svgCache['butterfly1']) ? 'butterfly1' :
-                 (svgCache['butterfly2'] ? 'butterfly2' : 'butterfly1');
-    if(svgCache[name]) butterflyInstances.push(new ButterflyDOM(name));
+    const num = (Math.random()>0.5 && svgCache['bf1_left']) ? '1' :
+                (svgCache['bf2_left'] ? '2' : '1');
+    butterflyInstances.push(new ButterflyDOM(num));
   }
 }
 
@@ -517,9 +799,13 @@ document.addEventListener('mousemove', e=>{ cursor.style.left=e.clientX+'px'; cu
 window.addEventListener('load', async ()=>{
   // 載入 SVG 素材
   await Promise.all([
-    loadSVG('butterfly1','images/butterfly1.svg'),
-    loadSVG('butterfly2','images/butterfly2.svg'),
-    loadSVG('ginkgo','images/ginkgo.svg'),
+    loadSVG('bf1_left',  'images/butterfly1_left.svg'),
+    loadSVG('bf1_right', 'images/butterfly1_right.svg'),
+    loadSVG('bf1_body',  'images/butterfly1_body.svg'),
+    loadSVG('bf2_left',  'images/butterfly2_left.svg'),
+    loadSVG('bf2_right', 'images/butterfly2_right.svg'),
+    loadSVG('bf2_body',  'images/butterfly2_body.svg'),
+    loadSVG('ginkgo',    'images/ginkgo.svg'),
   ]);
   svgReady = true;
   buildGinkgoPath();
