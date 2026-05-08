@@ -3,13 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>心映好事 — 冥想空間</title>
+<title>心映好事 — 擁抱情緒牌卡冥想影片</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor:none; }
 
+/* 縮放容器：固定 1920x1080 設計尺寸，CSS scale 填滿螢幕 */
+#scene-wrap {
+  position:fixed;
+  width:1920px;
+  height:1080px;
+  top:50%; left:50%;
+  transform-origin:center center;
+  /* JS 會動態設定 transform:translate(-50%,-50%) scale(N) */
+}
 #scene {
-  position:fixed; inset:0; overflow:hidden;
+  position:absolute; inset:0; overflow:hidden;
 }
 #panorama {
   position:absolute; top:0; left:0;
@@ -250,23 +259,15 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 </head>
 <body>
 
-<div id="scene"><div id="panorama"></div></div>
+<div id="scene-wrap">
+  <div id="scene"><div id="panorama"></div></div>
+</div>
 <div id="vignette"></div>
 <div id="edge-mask"></div>
 <canvas id="canvas"></canvas>
 <div id="svg-layer"></div>
 
 <div id="brand"><img src="images/logo.svg" alt="心映好事"></div>
-
-<!-- 四季切換點點 -->
-<div id="season-dots">
-  <div class="season-dot active" data-season="spring"></div>
-  <div class="season-dot" data-season="summer"></div>
-  <div class="season-dot" data-season="autumn"></div>
-  <div class="season-dot" data-season="winter"></div>
-</div>
-
-<div id="guide"><div id="guide-text">讓自己慢下來，再抽一張牌</div></div>
 <div id="cursor"></div>
 
 <!-- 音樂 -->
@@ -793,26 +794,7 @@ function changeSeason(newSeason){
 
 const SEASON_ORDER=['spring','summer','autumn','winter'];
 
-function updateDots(){
-  document.querySelectorAll('.season-dot').forEach(dot=>{
-    dot.classList.toggle('active', dot.dataset.season === activeSeason);
-  });
-}
-
-// 點點點擊切換季節
-document.querySelectorAll('.season-dot').forEach(dot=>{
-  dot.addEventListener('click', e=>{
-    e.stopPropagation();
-    const targetSeason = dot.dataset.season;
-    if(targetSeason === activeSeason) return;
-    const idx = IMAGES.findIndex(img=>img.season===targetSeason && !img.transition);
-    if(idx < 0) return;
-    const targetX = positions[idx];
-    const progress = targetX / singleSetWidth;
-    startTime = performance.now() - pauseAccum - (progress * TOTAL_DURATION);
-    changeSeason(targetSeason);
-  });
-});
+function updateDots(){ /* 點點已移除 */ }
 
 // ═══════════════════════════════════════
 // RWD 縮放
@@ -874,6 +856,17 @@ function detectSeasonByX(scrollX){
   return IMAGES[0].season;
 }
 
+// RWD 縮放：縮放 scene-wrap 填滿螢幕
+const sceneWrap = document.getElementById('scene-wrap');
+function applyRWD(){
+  const scaleX = window.innerWidth  / 1920;
+  const scaleY = window.innerHeight / 1080;
+  const scale  = Math.max(scaleX, scaleY);
+  sceneWrap.style.transform = `translate(-50%,-50%) scale(${scale})`;
+}
+applyRWD();
+window.addEventListener('resize', applyRWD);
+
 function loop(ts){
   if(!startTime) startTime=ts;
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -882,20 +875,7 @@ function loop(ts){
     const elapsed=(ts-startTime)-pauseAccum;
     const progress=(elapsed%TOTAL_DURATION)/TOTAL_DURATION;
     const x=-(progress*singleSetWidth);
-
-    // RWD cover：以高度和寬度中較大的縮放比填滿螢幕
-    const BASE_W = 1920;
-    const BASE_H = 1080;
-    const scaleByH = window.innerHeight / BASE_H;
-    const scaleByW = window.innerWidth  / BASE_W;
-    const scale    = Math.max(scaleByH, scaleByW);
-
-    // 垂直置中（cover 後高度可能超出，需要往上偏移）
-    const scaledH  = BASE_H * scale;
-    const offsetY  = (window.innerHeight - scaledH) / 2;
-
-    panorama.style.transform = `translateY(${offsetY}px) scale(${scale}) translateX(${x/scale}px)`;
-    panorama.style.transformOrigin = 'top left';
+    panorama.style.transform=`translateX(${x}px)`;
 
     const season = detectSeasonByX(Math.abs(x));
     if(season !== currentDetectedSeason){
