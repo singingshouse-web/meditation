@@ -727,7 +727,7 @@ class GinkgoLeaf {
     this.vy = 0.9 + rnd(1.6);
     this.rot = rnd(Math.PI*2);
     this.rotSpeed = (Math.random()-0.5) * 0.07;
-    this.size = 8 + rnd(10); // 直接用大小控制，不依賴SVG scale
+    this.size = 15 + rnd(15); // 放大讓它更明顯
     this.opacity = 0; this.fadeIn = 0.006+rnd(0.006);
     this.swayFreq = 0.015+rnd(0.015); this.t = rnd(1000);
     this.hue = 42 + rnd(15);
@@ -748,31 +748,34 @@ class GinkgoLeaf {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-
-    if(ginkgoPath){
-      // 用 Path2D 繪製真實銀杏葉形狀
-      const sc = this.size / 540;
-      ctx.scale(sc, sc);
-      ctx.translate(-540, -540);
-      ctx.fillStyle = `hsla(${this.hue},${this.sat}%,${this.lit}%,${a*0.85})`;
-      ctx.fill(ginkgoPath);
-    } else {
-      // 備用：用扇形模擬銀杏葉
-      const s = this.size;
-      ctx.fillStyle = `hsla(${this.hue},${this.sat}%,${this.lit}%,${a*0.85})`;
-      ctx.beginPath();
-      ctx.moveTo(0, s*0.3);
-      ctx.quadraticCurveTo(-s*0.6, -s*0.2, 0, -s*0.5);
-      ctx.quadraticCurveTo(s*0.6, -s*0.2, 0, s*0.3);
-      ctx.fill();
-      // 葉柄
-      ctx.strokeStyle = `hsla(${this.hue},${this.sat}%,${this.lit-10}%,${a*0.6})`;
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(0, s*0.3);
-      ctx.lineTo(0, s*0.6);
-      ctx.stroke();
-    }
+    const s = this.size;
+    ctx.fillStyle = `hsla(${this.hue},${this.sat}%,${this.lit}%,${a*0.85})`;
+    // 銀杏葉：扇形
+    ctx.beginPath();
+    ctx.moveTo(0, s*0.5);
+    ctx.quadraticCurveTo(-s*0.7, s*0.1, -s*0.6, -s*0.3);
+    ctx.quadraticCurveTo(-s*0.2, -s*0.7, 0, -s*0.5);
+    ctx.quadraticCurveTo(s*0.2, -s*0.7, s*0.6, -s*0.3);
+    ctx.quadraticCurveTo(s*0.7, s*0.1, 0, s*0.5);
+    ctx.fill();
+    // 葉脈
+    ctx.strokeStyle = `hsla(${this.hue-5},${this.sat}%,${this.lit-15}%,${a*0.4})`;
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(0, s*0.5);
+    ctx.lineTo(0, -s*0.4);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-s*0.4, -s*0.2);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(s*0.4, -s*0.2);
+    ctx.stroke();
+    // 葉柄
+    ctx.strokeStyle = `hsla(${this.hue},60%,45%,${a*0.6})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, s*0.5);
+    ctx.lineTo(0, s*0.9);
+    ctx.stroke();
     ctx.restore();
   }
 }
