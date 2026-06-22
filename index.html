@@ -334,8 +334,8 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 <div id="welcome-screen">
   <div id="welcome-blur"></div>
   <div id="welcome-text">
-    <div class="line1">給自己一段放鬆的時間，</div>
-    <div class="line2">開始這段靜心之旅。</div>
+    <div class="line1">給自己一段放鬆的時間</div>
+    <div class="line2">開始這段靜心之旅</div>
   </div>
   <button id="start-btn">開始</button>
 </div>
@@ -1140,7 +1140,12 @@ function togglePause(){
   else { paused=false; pauseAccum+=performance.now()-pauseAt; document.getElementById('pause-hint').textContent='點擊暫停'; }
 }
 document.addEventListener('click', e=>{ if(!welcomeDismissed) return; startMusicOnce(); togglePause(); });
-document.addEventListener('touchstart', e=>{ e.preventDefault(); if(!welcomeDismissed) return; startMusicOnce(); togglePause(); },{passive:false});
+document.addEventListener('touchstart', e=>{
+  if(!welcomeDismissed) return; // 迎接畫面期間完全不攔截
+  e.preventDefault();
+  startMusicOnce();
+  togglePause();
+},{passive:false});
 
 // ═══════════════════════════════════════
 // 游標
