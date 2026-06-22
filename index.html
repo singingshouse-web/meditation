@@ -1121,14 +1121,16 @@ function toggleMusic(){
   }
 }
 musicBtn.addEventListener('click', e=>{ e.stopPropagation(); toggleMusic(); });
+musicBtn.addEventListener('touchend', e=>{ e.stopPropagation(); e.preventDefault(); toggleMusic(); });
 
 // 控制按鈕（暫停/播放畫面）
 const controlBtn = document.getElementById('control-btn');
 const iconPlaying = document.getElementById('icon-playing');
 const iconStopped = document.getElementById('icon-stopped');
 
-controlBtn.addEventListener('click', e=>{
+function handleControl(e){
   e.stopPropagation();
+  e.preventDefault();
   startMusicOnce();
   togglePause();
   if(paused){
@@ -1138,7 +1140,9 @@ controlBtn.addEventListener('click', e=>{
     iconPlaying.style.display='block';
     iconStopped.style.display='none';
   }
-});
+}
+controlBtn.addEventListener('click', handleControl);
+controlBtn.addEventListener('touchend', handleControl);
 function togglePause(){
   if(!paused){ paused=true; pauseAt=performance.now(); document.getElementById('pause-hint').textContent='點擊繼續'; }
   else { paused=false; pauseAccum+=performance.now()-pauseAt; document.getElementById('pause-hint').textContent='點擊暫停'; }
