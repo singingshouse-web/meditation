@@ -91,7 +91,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 
 /* 品牌 logo */
 #brand { position:fixed; top:20px; right:20px; z-index:50; pointer-events:none; }
-#brand img { width:64px; opacity:0; filter:brightness(0) invert(1); transition:opacity 2s ease; }
+#brand img { width:44px; opacity:0; filter:brightness(0) invert(1); transition:opacity 2s ease; }
 
 /* 底部引導文字 — 拿掉 */
 #guide { display:none; }
@@ -198,7 +198,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 }
 
 #brand { position:fixed; top:24px; right:28px; z-index:50; pointer-events:none; }
-#brand img { width:72px; opacity:0; filter:brightness(0) invert(1); transition:opacity 2s ease; }
+#brand img { width:52px; opacity:0; filter:brightness(0) invert(1); transition:opacity 2s ease; }
 #guide { position:fixed; bottom:36px; left:50%; transform:translateX(-50%); z-index:50; pointer-events:none; text-align:center; opacity:0; transition:opacity 2s ease; }
 #guide-text {
   font-family:'Georgia','宋體',serif; font-size:12px; letter-spacing:5px;
@@ -271,8 +271,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
   gap:48px;
   transition:opacity 1.8s ease;
 }
-#welcome-screen::before {
-  content:'';
+#welcome-blur {
   position:absolute; inset:0;
   backdrop-filter:blur(18px);
   -webkit-backdrop-filter:blur(18px);
@@ -333,6 +332,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 
 <!-- 迎接畫面 -->
 <div id="welcome-screen">
+  <div id="welcome-blur"></div>
   <div id="welcome-text">
     <div class="line1">給自己一段放鬆的時間，</div>
     <div class="line2">開始這段靜心之旅。</div>
@@ -1077,8 +1077,11 @@ function startMusicOnce(){
 const welcomeScreen = document.getElementById('welcome-screen');
 const startBtn = document.getElementById('start-btn');
 
+let welcomeDismissed = false;
+
 startBtn.addEventListener('click', e=>{
   e.stopPropagation();
+  welcomeDismissed = false; // 還在淡出中，先擋住全域事件
   bgm.play().then(()=>{
     musicPlaying = true;
     musicStarted = true;
@@ -1086,7 +1089,10 @@ startBtn.addEventListener('click', e=>{
     iconMusicOff.style.display='none';
   }).catch(()=>{});
   welcomeScreen.classList.add('fade-out');
-  setTimeout(()=>{ welcomeScreen.style.display='none'; }, 1900);
+  setTimeout(()=>{
+    welcomeScreen.style.display='none';
+    welcomeDismissed = true; // 淡出完成，開放全域事件
+  }, 1900);
 });
 
 }
@@ -1127,8 +1133,8 @@ function togglePause(){
   if(!paused){ paused=true; pauseAt=performance.now(); document.getElementById('pause-hint').textContent='點擊繼續'; }
   else { paused=false; pauseAccum+=performance.now()-pauseAt; document.getElementById('pause-hint').textContent='點擊暫停'; }
 }
-document.addEventListener('click', e=>{ startMusicOnce(); togglePause(); });
-document.addEventListener('touchstart', e=>{ e.preventDefault(); startMusicOnce(); togglePause(); },{passive:false});
+document.addEventListener('click', e=>{ if(!welcomeDismissed) return; startMusicOnce(); togglePause(); });
+document.addEventListener('touchstart', e=>{ e.preventDefault(); if(!welcomeDismissed) return; startMusicOnce(); togglePause(); },{passive:false});
 
 // ═══════════════════════════════════════
 // 游標
