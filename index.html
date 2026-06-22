@@ -995,7 +995,7 @@ document.addEventListener('keydown', e=>{
 // 主 loop
 // ═══════════════════════════════════════
 const TOTAL_DURATION = 870000;
-let startTime=null, paused=false, pauseAccum=0, pauseAt=null;
+let startTime=null, paused=true, pauseAccum=0, pauseAt=null;
 let currentDetectedSeason='spring';
 
 function detectSeasonByX(scrollX){
@@ -1082,12 +1082,18 @@ let welcomeDismissed = false;
 startBtn.addEventListener('click', e=>{
   e.stopPropagation();
   welcomeDismissed = false; // 還在淡出中，先擋住全域事件
+  // 啟動音樂
   bgm.play().then(()=>{
     musicPlaying = true;
     musicStarted = true;
     iconMusicOn.style.display='block';
     iconMusicOff.style.display='none';
   }).catch(()=>{});
+  // 啟動動畫
+  paused = false;
+  pauseAccum = 0;
+  startTime = null; // loop 會在下一幀重設
+  // 淡出迎接畫面
   welcomeScreen.classList.add('fade-out');
   setTimeout(()=>{
     welcomeScreen.style.display='none';
