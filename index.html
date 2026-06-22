@@ -130,9 +130,11 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
 }
 
 #cursor {
-  position:fixed; width:5px; height:5px; border-radius:50%;
-  background:rgba(255,240,255,0.35); pointer-events:none;
+  position:fixed; width:8px; height:8px; border-radius:50%;
+  background:rgba(255,240,255,0.7); pointer-events:none;
   z-index:9999; transform:translate(-50%,-50%);
+  box-shadow:0 0 0 6px rgba(255,240,255,0.15);
+  transition:opacity 0.3s ease;
 }
 #pause-hint { display:none; }
 
@@ -1080,8 +1082,9 @@ const startBtn = document.getElementById('start-btn');
 
 let welcomeDismissed = false;
 
-startBtn.addEventListener('click', e=>{
+function handleStart(e){
   e.stopPropagation();
+  if(welcomeScreen.style.display === 'none') return; // 防止重複觸發
   welcomeDismissed = false; // 還在淡出中，先擋住全域事件
   // 啟動音樂
   bgm.play().then(()=>{
@@ -1100,7 +1103,9 @@ startBtn.addEventListener('click', e=>{
     welcomeScreen.style.display='none';
     welcomeDismissed = true; // 淡出完成，開放全域事件
   }, 1900);
-});
+}
+startBtn.addEventListener('click', handleStart);
+startBtn.addEventListener('touchend', handleStart);
 
 function toggleMusic(){
   if(musicPlaying){
@@ -1141,6 +1146,8 @@ function togglePause(){
 document.addEventListener('click', e=>{ if(!welcomeDismissed) return; startMusicOnce(); togglePause(); });
 document.addEventListener('touchstart', e=>{
   if(!welcomeDismissed) return; // 迎接畫面期間完全不攔截
+  // 如果點到按鈕就不攔截，讓按鈕自己的 click 正常觸發
+  if(e.target.closest('#music-btn, #control-btn, #start-btn')) return;
   e.preventDefault();
   startMusicOnce();
   togglePause();
