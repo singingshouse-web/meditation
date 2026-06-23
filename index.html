@@ -1122,8 +1122,17 @@ function handleControl(e){
 controlBtn.addEventListener('click', handleControl);
 controlBtn.addEventListener('touchend', handleControl);
 function togglePause(){
-  if(!paused){ paused=true; pauseAt=performance.now(); document.getElementById('pause-hint').textContent='點擊繼續'; }
-  else { paused=false; pauseAccum+=performance.now()-pauseAt; document.getElementById('pause-hint').textContent='點擊暫停'; }
+  if(!paused){
+    paused=true;
+    pauseAt=performance.now();
+    bgm.pause();
+    document.getElementById('pause-hint').textContent='點擊繼續';
+  } else {
+    paused=false;
+    pauseAccum+=performance.now()-pauseAt;
+    bgm.play().catch(()=>{});
+    document.getElementById('pause-hint').textContent='點擊暫停';
+  }
 }
 document.addEventListener('click', e=>{ if(!welcomeDismissed) return; startMusicOnce(); togglePause(); });
 document.addEventListener('touchstart', e=>{
