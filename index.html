@@ -135,6 +135,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:#0d0a12; cursor
   box-shadow:0 0 0 6px rgba(255,240,255,0.15);
   transition:opacity 0.3s ease;
 }
+@media (hover: none) {
+  #cursor { display:none; }
+  html, body { cursor:auto; }
+}
 #pause-hint { display:none; }
 
 /* 蝴蝶容器：上下飄動 */
