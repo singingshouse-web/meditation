@@ -1024,7 +1024,25 @@ function loop(ts){
 
   if(!paused){
     const elapsed=(ts-startTime)-pauseAccum;
-    const progress=(elapsed%TOTAL_DURATION)/TOTAL_DURATION;
+
+    // 播放完畢 → 跳回迎接畫面
+    if(elapsed >= TOTAL_DURATION){
+      paused = true;
+      musicPlaying = false;
+      musicStarted = false;
+      startTime = null;
+      pauseAccum = 0;
+      bgm.pause();
+      bgm.currentTime = 0;
+      welcomeDismissed = false;
+      welcomeScreen.style.display = 'flex';
+      welcomeScreen.style.opacity = '1';
+      welcomeScreen.classList.remove('fade-out');
+      requestAnimationFrame(loop);
+      return;
+    }
+
+    const progress = elapsed / TOTAL_DURATION;
     const x=-(progress*singleSetWidth);
     panorama.style.transform=`translateX(${x}px)`;
 
